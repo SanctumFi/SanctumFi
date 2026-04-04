@@ -19,15 +19,24 @@ export function useXaman() {
 
   useEffect(() => {
     const xumm = getXumm();
-    xumm.environment.ready.then(() => {
-      if (xumm.runtime?.xapp) {
-        xumm.environment.ott?.then((ott: { account?: string } | undefined) => {
-          if (ott?.account) {
-            setXrplAddress(ott.account);
-            setConnected(true);
-          }
-        });
+
+    // Fired when user successfully signs in (or re-signs after logout)
+    xumm.on("success", async () => {
+      const account = await (xumm as any).user?.account;
+      if (account) {
+        setXrplAddress(account);
+        setConnected(true);
+        setLoading(false);
       }
+    });
+
+    xumm.on("logout", () => {
+      setXrplAddress(null);
+      setConnected(false);
+    });
+
+    xumm.on("ready", () => {
+      console.log("Xaman SDK ready");
     });
   }, []);
 
@@ -36,14 +45,9 @@ export function useXaman() {
     try {
       const xumm = getXumm();
       await xumm.authorize();
-      const account = xumm.runtime?.jwt?.sub || null;
-      if (account) {
-        setXrplAddress(account);
-        setConnected(true);
-      }
+      // The "success" event handler above will set the address
     } catch (e) {
       console.error("Xaman connect failed:", e);
-    } finally {
       setLoading(false);
     }
   }, []);

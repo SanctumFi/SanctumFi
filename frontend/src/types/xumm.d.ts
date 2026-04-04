@@ -2,14 +2,21 @@ declare module "xumm" {
   export class Xumm {
     constructor(apiKey: string);
 
+    user: {
+      account: Promise<string | undefined>;
+      picture: Promise<string | undefined>;
+      name: Promise<string | undefined>;
+      networkType: Promise<string | undefined>;
+      networkEndpoint: Promise<string | undefined>;
+      token: Promise<string | undefined>;
+    };
+
     environment: {
       ready: Promise<void>;
-      ott?: Promise<{ account?: string } | undefined>;
     };
 
     runtime?: {
       xapp?: boolean;
-      jwt?: { sub?: string };
     };
 
     payload?: {
@@ -24,7 +31,7 @@ declare module "xumm" {
     authorize(): Promise<unknown>;
     logout(): Promise<void>;
 
-    on(event: string, callback: (data: unknown) => void): void;
+    on(event: "ready" | "success" | "logout" | "error" | "payload", callback: (...args: unknown[]) => void): void;
 
     xapp?: {
       openSignRequest(payload: unknown): void;
