@@ -9,7 +9,7 @@ interface ICreditVault {
     function repay(address asset, uint256 amount) external payable;
     function withdrawCollateral(address asset, uint256 amount) external;
     function liquidate(address user) external;
-    function getDebt(address user) external view returns (uint256 flrDebt, uint256 fxrpDebt);
-    function getHealthFactor(address user) external view returns (uint256);
-    function getMaxBorrow(address user, address asset) external view returns (uint256);
+    function getDebt(address user) external returns (uint256 flrDebt, uint256 fxrpDebt);
+    function getHealthFactor(address user) external returns (uint256);
+    function getMaxBorrow(address user, address asset) external returns (uint256);
 }
