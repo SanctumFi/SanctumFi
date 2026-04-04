@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ethers } from "ethers";
-import { CONTRACTS, FTSOV2_ABI, FLR_USD_FEED_ID, XRP_USD_FEED_ID } from "../config/contracts";
+import { publicClient } from "../lib/flareClient";
+import { CONTRACTS, ftsoV2Abi, FLR_USD_FEED_ID, XRP_USD_FEED_ID } from "../config/contracts";
 
 export interface Prices {
   flrUsd: number;
@@ -8,16 +8,20 @@ export interface Prices {
   timestamp: number;
 }
 
-export function usePrices(provider: ethers.BrowserProvider | null) {
+export function usePrices() {
   const [prices, setPrices] = useState<Prices | null>(null);
 
   useEffect(() => {
-    if (!provider) return;
     async function fetchPrices() {
       try {
-        const ftso = new ethers.Contract(CONTRACTS.ftsoV2, FTSOV2_ABI, provider);
-        const feedIds = [FLR_USD_FEED_ID, XRP_USD_FEED_ID];
-        const [values, decimals, timestamp] = await ftso.getFeedsById.staticCall(feedIds);
+        const result = await publicClient.readContract({
+          address: CONTRACTS.ftsoV2,
+          abi: ftsoV2Abi,
+          functionName: "getFeedsById",
+          args: [[FLR_USD_FEED_ID, XRP_USD_FEED_ID]],
+        });
+
+        const [values, decimals, timestamp] = result as [bigint[], number[], bigint];
         const flrUsd = Number(values[0]) * Math.pow(10, -Number(decimals[0]));
         const xrpUsd = Number(values[1]) * Math.pow(10, -Number(decimals[1]));
         setPrices({ flrUsd, xrpUsd, timestamp: Number(timestamp) });
@@ -28,7 +32,7 @@ export function usePrices(provider: ethers.BrowserProvider | null) {
     fetchPrices();
     const interval = setInterval(fetchPrices, 10_000);
     return () => clearInterval(interval);
-  }, [provider]);
+  }, []);
 
   return prices;
 }
