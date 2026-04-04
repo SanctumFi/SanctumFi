@@ -1,24 +1,32 @@
 import { useState } from "react";
-import { ethers } from "ethers";
-import { CONTRACTS, INSTRUCTION_SENDER_ABI } from "../config/contracts";
 
-export function useCreditScore(provider: ethers.BrowserProvider | null) {
+type SendPaymentFn = (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
+
+export function useCreditScore(sendPayment: SendPaymentFn | null) {
   const [requesting, setRequesting] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [txResult, setTxResult] = useState<unknown>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function requestScore(encryptedPayload: Uint8Array) {
-    if (!provider) throw new Error("No provider");
+  async function requestScore(xrplAddress: string) {
+    if (!sendPayment) throw new Error("Not connected");
     setRequesting(true);
+    setError(null);
     try {
-      const signer = await provider.getSigner();
-      const sender = new ethers.Contract(CONTRACTS.instructionSender, INSTRUCTION_SENDER_ABI, signer);
-      const tx = await sender.requestCreditScore(encryptedPayload, { value: ethers.parseEther("0.01") });
-      setTxHash(tx.hash);
-      await tx.wait();
+      // HACKATHON DEMO: plaintext token for local TEE mode
+      // Production: encrypt with TEE public key via ECIES before submission
+      const payload = JSON.stringify({
+        plaid_access_token: "access-sandbox-de3ce8ef-33f8-452c-a685-8671031fc0f6",
+        user_address: xrplAddress,
+      });
+      const memoHex = Buffer.from(payload, "utf-8").toString("hex");
+      const result = await sendPayment(memoHex, "1000000", "FlareScore: Compute Credit Score");
+      setTxResult(result);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to request score");
     } finally {
       setRequesting(false);
     }
   }
 
-  return { requestScore, requesting, txHash };
+  return { requestScore, requesting, txResult, error };
 }
