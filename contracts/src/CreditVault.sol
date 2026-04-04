@@ -4,10 +4,13 @@ pragma solidity ^0.8.25;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./interfaces/IFtsoV2.sol";
 
 /// @title CreditVault — TEE credit-scored lending engine for FlareScore
-contract CreditVault is Ownable {
+contract CreditVault is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // -------------------------------------------------------------------------
@@ -21,11 +24,13 @@ contract CreditVault is Ownable {
     uint256 public constant LIQUIDATION_DISCOUNT = 500;   // 5% in basis points (unused in simple seize model)
     uint256 public constant BASIS_POINTS        = 10_000;
 
-    // LTV caps (basis points of collateral that can be borrowed)
-    uint256 public constant PLATINUM_LTV = 8_000;  // 80%  — score 800-1000
-    uint256 public constant GOLD_LTV     = 12_000; // 120% — score 600-799
-    uint256 public constant SILVER_LTV   = 15_000; // 150% — score 400-599
-    uint256 public constant BRONZE_LTV   = 20_000; // 200% — score 0-399
+    // Minimum collateral ratio (basis points of debt that must be covered by collateral).
+    // e.g. PLATINUM_LTV = 8000 means collateral must be >= 80% of debt (under-collateralised tier).
+    // BRONZE_LTV = 20000 means collateral must be >= 200% of debt.
+    uint256 public constant PLATINUM_LTV = 8_000;  // 80%  collateral ratio — score 800-1000
+    uint256 public constant GOLD_LTV     = 12_000; // 120% collateral ratio — score 600-799
+    uint256 public constant SILVER_LTV   = 15_000; // 150% collateral ratio — score 400-599
+    uint256 public constant BRONZE_LTV   = 20_000; // 200% collateral ratio — score 0-399
 
     uint256 public constant HEALTH_PRECISION  = 1e18;
     uint256 public constant SECONDS_PER_YEAR  = 365 days;
@@ -51,6 +56,11 @@ contract CreditVault is Ownable {
     IERC20   public immutable fxrp;
     address  public immutable teeSigner;
     uint256  public immutable scoreExpiry;
+
+    /// @notice Protocol-owned FLR liquidity (separate from user collateral).
+    uint256 public poolFLR;
+    /// @notice Protocol-owned FXRP liquidity (separate from user collateral).
+    uint256 public poolFXRP;
 
     // -------------------------------------------------------------------------
     // Events
@@ -89,34 +99,46 @@ contract CreditVault is Ownable {
     // Pool funding (owner only)
     // -------------------------------------------------------------------------
 
-    function fundPoolFLR() external payable onlyOwner {}
+    function fundPoolFLR() external payable onlyOwner {
+        poolFLR += msg.value;
+    }
 
     function fundPoolFXRP(uint256 amount) external onlyOwner {
         fxrp.safeTransferFrom(msg.sender, address(this), amount);
+        poolFXRP += amount;
     }
 
     // -------------------------------------------------------------------------
-    // Task 2 — Score storage + collateral deposits
+    // Score storage + collateral deposits
     // -------------------------------------------------------------------------
 
-    /// @notice Called by TEE signer to store an attested credit score for a user.
+    /// @notice Anyone can relay a TEE-signed credit score for a user.
     function receiveScore(
         address user,
         uint256 score,
         uint256 timestamp,
-        bytes calldata /* sig */
+        bytes calldata sig
     ) external {
-        require(msg.sender == teeSigner, "CreditVault: not tee signer");
+        // Bug 4: verify ECDSA signature from the trusted TEE signer.
+        bytes32 messageHash    = keccak256(abi.encodePacked(user, score, timestamp));
+        bytes32 ethSignedHash  = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address recovered      = ECDSA.recover(ethSignedHash, sig);
+        require(recovered == teeSigner, "CreditVault: invalid TEE signature");
+
         require(score <= 1000, "CreditVault: score out of range");
 
-        positions[user].creditScore     = score;
-        positions[user].scoreTimestamp  = timestamp;
+        // Bug 5: validate timestamp — not from the future, not too old.
+        require(timestamp <= block.timestamp, "CreditVault: future timestamp");
+        require(block.timestamp - timestamp <= 1 hours, "CreditVault: score too old");
+
+        positions[user].creditScore    = score;
+        positions[user].scoreTimestamp = timestamp;
 
         emit ScoreReceived(user, score, timestamp);
     }
 
     /// @notice Deposit native FLR as collateral.
-    function depositFLR() external payable {
+    function depositFLR() external payable nonReentrant {
         positions[msg.sender].flrCollateral += msg.value;
         emit CollateralDeposited(msg.sender, address(0), msg.value);
     }
@@ -128,7 +150,7 @@ contract CreditVault is Ownable {
         emit CollateralDeposited(msg.sender, address(fxrp), amount);
     }
 
-    /// @notice Returns LTV cap (in basis points) for a given credit score.
+    /// @notice Returns the minimum collateral ratio (in basis points) for a given credit score.
     function getLtvBps(uint256 score) public pure returns (uint256) {
         if (score >= 800) return PLATINUM_LTV;
         if (score >= 600) return GOLD_LTV;
@@ -137,41 +159,49 @@ contract CreditVault is Ownable {
     }
 
     // -------------------------------------------------------------------------
-    // Task 3 — Borrow, repay, liquidate
+    // Borrow, repay, liquidate
     // -------------------------------------------------------------------------
 
     /// @notice Borrow FLR (asset == address(0)) or FXRP (asset == fxrp address).
-    function borrow(address asset, uint256 amount) external {
+    function borrow(address asset, uint256 amount) external nonReentrant {
         Position storage pos = positions[msg.sender];
 
         require(_hasValidScore(pos), "CreditVault: no valid score");
         require(amount > 0, "CreditVault: zero amount");
 
-        // Apply new debt tentatively to check LTV.
+        // Bug 7: fetch prices once.
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+
+        // Apply new debt tentatively to check collateral ratio.
         if (asset == address(0)) {
+            require(poolFLR >= amount, "CreditVault: insufficient pool FLR");
             pos.flrDebt += amount;
             if (pos.flrBorrowTimestamp == 0) pos.flrBorrowTimestamp = block.timestamp;
         } else {
             require(asset == address(fxrp), "CreditVault: unknown asset");
+            require(poolFXRP >= amount, "CreditVault: insufficient pool FXRP");
             pos.fxrpDebt += amount;
             if (pos.fxrpBorrowTimestamp == 0) pos.fxrpBorrowTimestamp = block.timestamp;
         }
 
-        uint256 colUSD  = _collateralValueUSD(pos);
-        uint256 debtUSD = _debtValueUSD(pos);
+        uint256 colUSD  = _collateralValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+        uint256 debtUSD = _debtValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
         uint256 ltvBps  = getLtvBps(pos.creditScore);
 
-        // debtUSD / collateralUSD <= ltvBps / BASIS_POINTS
-        require(debtUSD * BASIS_POINTS <= colUSD * ltvBps, "CreditVault: exceeds LTV");
+        // Bug 1: correct collateral ratio check.
+        // colUSD * BASIS_POINTS >= debtUSD * ltvBps
+        // e.g. Platinum: col * 10000 >= debt * 8000  → col >= debt * 0.8
+        // e.g. Bronze:   col * 10000 >= debt * 20000 → col >= debt * 2.0
+        require(colUSD * BASIS_POINTS >= debtUSD * ltvBps, "CreditVault: exceeds LTV");
 
         // Transfer asset to borrower.
         if (asset == address(0)) {
-            require(address(this).balance >= amount, "CreditVault: insufficient pool FLR");
-            // Re-check: balance includes collateral so we track separately via accounting.
-            // Safe because flrCollateral is recorded independently.
+            poolFLR -= amount;
             (bool ok,) = msg.sender.call{value: amount}("");
             require(ok, "CreditVault: FLR transfer failed");
         } else {
+            poolFXRP -= amount;
             fxrp.safeTransfer(msg.sender, amount);
         }
 
@@ -179,56 +209,49 @@ contract CreditVault is Ownable {
     }
 
     /// @notice Repay debt. For FLR send msg.value; for FXRP set amount and approve first.
-    function repay(address asset, uint256 amount) external payable {
+    function repay(address asset, uint256 amount) external payable nonReentrant {
         Position storage pos = positions[msg.sender];
 
         if (asset == address(0)) {
             require(pos.flrDebt > 0, "CreditVault: no FLR debt");
-            uint256 totalOwed = _flrDebtWithFees(pos);
 
-            uint256 payment = msg.value;
-            if (payment > totalOwed) {
-                // Refund excess.
-                uint256 refund = payment - totalOwed;
-                payment = totalOwed;
-                (bool ok,) = msg.sender.call{value: refund}("");
+            (uint256 totalDebt,) = _getDebtWithFees(pos);
+            uint256 repayAmount = msg.value > totalDebt ? totalDebt : msg.value;
+
+            // Bug 8: apply payment — reduce total debt, reset timestamp.
+            pos.flrDebt = totalDebt - repayAmount;
+            pos.flrBorrowTimestamp = pos.flrDebt > 0 ? block.timestamp : 0;
+
+            // Return repayment to pool.
+            poolFLR += repayAmount;
+
+            // Refund excess.
+            if (msg.value > repayAmount) {
+                (bool ok,) = msg.sender.call{value: msg.value - repayAmount}("");
                 require(ok, "CreditVault: refund failed");
             }
 
-            // Clear or reduce debt proportionally (simple: payment clears principal first).
-            if (payment >= totalOwed) {
-                pos.flrDebt = 0;
-                pos.flrBorrowTimestamp = 0;
-            } else {
-                // Partial: reduce principal by (payment / totalOwed) * principal.
-                pos.flrDebt = pos.flrDebt - (pos.flrDebt * payment / totalOwed);
-                pos.flrBorrowTimestamp = block.timestamp;
-            }
-
-            emit Repaid(msg.sender, asset, payment);
+            emit Repaid(msg.sender, asset, repayAmount);
         } else {
             require(asset == address(fxrp), "CreditVault: unknown asset");
             require(pos.fxrpDebt > 0, "CreditVault: no FXRP debt");
 
-            uint256 totalOwed = _fxrpDebtWithFees(pos);
-            uint256 payment   = amount > totalOwed ? totalOwed : amount;
+            (, uint256 totalDebt) = _getDebtWithFees(pos);
+            uint256 repayAmount = amount > totalDebt ? totalDebt : amount;
 
-            fxrp.safeTransferFrom(msg.sender, address(this), payment);
+            fxrp.safeTransferFrom(msg.sender, address(this), repayAmount);
 
-            if (payment >= totalOwed) {
-                pos.fxrpDebt = 0;
-                pos.fxrpBorrowTimestamp = 0;
-            } else {
-                pos.fxrpDebt = pos.fxrpDebt - (pos.fxrpDebt * payment / totalOwed);
-                pos.fxrpBorrowTimestamp = block.timestamp;
-            }
+            pos.fxrpDebt = totalDebt - repayAmount;
+            pos.fxrpBorrowTimestamp = pos.fxrpDebt > 0 ? block.timestamp : 0;
 
-            emit Repaid(msg.sender, asset, payment);
+            poolFXRP += repayAmount;
+
+            emit Repaid(msg.sender, asset, repayAmount);
         }
     }
 
     /// @notice Withdraw collateral as long as the position remains healthy.
-    function withdrawCollateral(address asset, uint256 amount) external {
+    function withdrawCollateral(address asset, uint256 amount) external nonReentrant {
         Position storage pos = positions[msg.sender];
         require(amount > 0, "CreditVault: zero amount");
 
@@ -242,11 +265,12 @@ contract CreditVault is Ownable {
         }
 
         // If debt exists, ensure position is still healthy after withdrawal.
-        uint256 debtUSD = _debtValueUSD(pos);
+        uint256 debtUSD = _debtValueUSDCached(pos);
         if (debtUSD > 0) {
-            uint256 colUSD = _collateralValueUSD(pos);
+            uint256 colUSD = _collateralValueUSDCached(pos);
             uint256 ltvBps = getLtvBps(pos.creditScore);
-            require(debtUSD * BASIS_POINTS <= colUSD * ltvBps, "CreditVault: would breach LTV");
+            // Bug 1: same corrected collateral ratio check.
+            require(colUSD * BASIS_POINTS >= debtUSD * ltvBps, "CreditVault: would breach LTV");
         }
 
         if (asset == address(0)) {
@@ -260,11 +284,21 @@ contract CreditVault is Ownable {
     }
 
     /// @notice Liquidate an unhealthy position: seize all collateral, clear all debt.
-    function liquidate(address user) external {
+    function liquidate(address user) external nonReentrant {
         Position storage pos = positions[user];
 
         require(_hasDebt(pos), "CreditVault: no debt");
-        require(getHealthFactor(user) < HEALTH_PRECISION, "CreditVault: position healthy");
+
+        // Bug 7: fetch prices once for liquidation check.
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+
+        uint256 colUSD  = _collateralValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+        uint256 debtUSD = _debtValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+        uint256 ltvBps  = getLtvBps(pos.creditScore);
+
+        // Bug 1: position is liquidatable when colUSD * BASIS_POINTS < debtUSD * ltvBps.
+        require(colUSD * BASIS_POINTS < debtUSD * ltvBps, "CreditVault: position healthy");
 
         uint256 flrCol  = pos.flrCollateral;
         uint256 fxrpCol = pos.fxrpCollateral;
@@ -277,6 +311,7 @@ contract CreditVault is Ownable {
         pos.flrBorrowTimestamp  = 0;
         pos.fxrpBorrowTimestamp = 0;
 
+        // Transfer collateral to liquidator (pool is not debited — debt absorbed as bad debt).
         if (flrCol > 0) {
             (bool ok,) = msg.sender.call{value: flrCol}("");
             require(ok, "CreditVault: FLR seize failed");
@@ -293,26 +328,30 @@ contract CreditVault is Ownable {
     // -------------------------------------------------------------------------
 
     /// @notice Returns current debt with fees for a user.
-    /// @dev    Not view because FTSO getFeedById is payable (but no ETH is consumed here).
-    function getDebt(address user) external returns (uint256 flrDebt, uint256 fxrpDebt) {
+    function getDebt(address user) external view returns (uint256 flrDebt, uint256 fxrpDebt) {
         Position storage pos = positions[user];
         flrDebt  = _flrDebtWithFees(pos);
         fxrpDebt = _fxrpDebtWithFees(pos);
     }
 
-    /// @notice Returns health factor scaled by HEALTH_PRECISION (1e18 = 1.0 — minimum healthy).
+    /// @notice Returns health factor scaled by HEALTH_PRECISION (1e18 = healthy minimum).
     /// @dev    Not view because FTSO getFeedById is payable (but no ETH is consumed here).
     function getHealthFactor(address user) public returns (uint256) {
         Position storage pos = positions[user];
-        uint256 debtUSD = _debtValueUSD(pos);
+
+        // Bug 7: fetch prices once.
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+
+        uint256 debtUSD = _debtValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
         if (debtUSD == 0) return type(uint256).max;
 
+        uint256 colUSD  = _collateralValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
         uint256 ltvBps  = getLtvBps(pos.creditScore);
-        uint256 colUSD  = _collateralValueUSD(pos);
 
-        // health = (collateralUSD * ltvBps) / (debtUSD * BASIS_POINTS)
-        // < 1.0 (scaled) means position is liquidatable
-        return (colUSD * ltvBps * HEALTH_PRECISION) / (debtUSD * BASIS_POINTS);
+        // Bug 1: health = (collateralUSD * BASIS_POINTS) / (debtUSD * ltvBps)
+        // >= 1.0 (scaled to HEALTH_PRECISION) means position is healthy.
+        return (colUSD * BASIS_POINTS * HEALTH_PRECISION) / (debtUSD * ltvBps);
     }
 
     /// @notice Returns how much more of `asset` the user can borrow given current collateral.
@@ -321,23 +360,26 @@ contract CreditVault is Ownable {
         Position storage pos = positions[user];
         if (!_hasValidScore(pos)) return 0;
 
-        uint256 colUSD  = _collateralValueUSD(pos);
-        uint256 debtUSD = _debtValueUSD(pos);
+        // Bug 7: fetch prices once.
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+
+        uint256 colUSD  = _collateralValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+        uint256 debtUSD = _debtValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
         uint256 ltvBps  = getLtvBps(pos.creditScore);
 
-        // maxDebtUSD = collateralUSD * ltvBps / BASIS_POINTS  (same as borrow cap)
-        uint256 maxDebtUSD = colUSD * ltvBps / BASIS_POINTS;
+        // Bug 1: maxDebtUSD = colUSD * BASIS_POINTS / ltvBps
+        // (inversion of the check: col * BASIS_POINTS >= debt * ltvBps)
+        uint256 maxDebtUSD = colUSD * BASIS_POINTS / ltvBps;
         if (maxDebtUSD <= debtUSD) return 0;
 
         uint256 remainingUSD = maxDebtUSD - debtUSD;
 
         // Convert remainingUSD back to asset units.
         if (asset == address(0)) {
-            (uint256 price, int8 dec,) = _getFlrPriceUSD();
-            return _fromUSD(remainingUSD, price, dec);
+            return _fromUSD(remainingUSD, flrPrice, flrDec);
         } else {
-            (uint256 price, int8 dec,) = _getXrpPriceUSD();
-            return _fromUSD(remainingUSD, price, dec);
+            return _fromUSD(remainingUSD, xrpPrice, xrpDec);
         }
     }
 
@@ -345,19 +387,22 @@ contract CreditVault is Ownable {
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    function _getFlrPriceUSD() internal returns (uint256 price, int8 dec, uint64 ts) {
-        (price, dec, ts) = ftsoV2.getFeedById(FLR_USD_FEED_ID);
+    /// @dev Bug 6: guard against zero price from FTSO.
+    function _getFlrPriceUSD() internal returns (uint256 price, int8 decimals) {
+        uint64 ts;
+        (price, decimals, ts) = ftsoV2.getFeedById(FLR_USD_FEED_ID);
+        require(price > 0, "CreditVault: invalid FLR price");
     }
 
-    function _getXrpPriceUSD() internal returns (uint256 price, int8 dec, uint64 ts) {
-        (price, dec, ts) = ftsoV2.getFeedById(XRP_USD_FEED_ID);
+    /// @dev Bug 6: guard against zero price from FTSO.
+    function _getXrpPriceUSD() internal returns (uint256 price, int8 decimals) {
+        uint64 ts;
+        (price, decimals, ts) = ftsoV2.getFeedById(XRP_USD_FEED_ID);
+        require(price > 0, "CreditVault: invalid XRP price");
     }
 
-    /// @dev Normalize an asset amount to 18-decimal USD value.
-    ///      `dec` is the decimal count of the FTSO price (e.g. 18 → price in 1e-18 USD per unit).
+    /// @dev Normalize an asset amount to USD value.
     function _toUSD(uint256 amount, uint256 price, int8 dec) internal pure returns (uint256) {
-        // USD = amount * price / 10^dec
-        // We work in 1e18 precision throughout.
         if (dec >= 0) {
             uint256 d = uint256(uint8(dec));
             return (amount * price) / (10 ** d);
@@ -378,18 +423,41 @@ contract CreditVault is Ownable {
         }
     }
 
-    function _collateralValueUSD(Position storage pos) internal returns (uint256) {
-        (uint256 flrPrice, int8 flrDec,) = _getFlrPriceUSD();
-        (uint256 xrpPrice, int8 xrpDec,) = _getXrpPriceUSD();
+    /// @dev Bug 7: accept pre-fetched prices to avoid duplicate FTSO calls.
+    function _collateralValueUSD(
+        Position storage pos,
+        uint256 flrPrice,
+        int8 flrDec,
+        uint256 xrpPrice,
+        int8 xrpDec
+    ) internal view returns (uint256) {
         return _toUSD(pos.flrCollateral, flrPrice, flrDec)
              + _toUSD(pos.fxrpCollateral, xrpPrice, xrpDec);
     }
 
-    function _debtValueUSD(Position storage pos) internal returns (uint256) {
-        (uint256 flrPrice, int8 flrDec,) = _getFlrPriceUSD();
-        (uint256 xrpPrice, int8 xrpDec,) = _getXrpPriceUSD();
+    /// @dev Bug 7: accept pre-fetched prices to avoid duplicate FTSO calls.
+    function _debtValueUSD(
+        Position storage pos,
+        uint256 flrPrice,
+        int8 flrDec,
+        uint256 xrpPrice,
+        int8 xrpDec
+    ) internal view returns (uint256) {
         return _toUSD(_flrDebtWithFees(pos), flrPrice, flrDec)
              + _toUSD(_fxrpDebtWithFees(pos), xrpPrice, xrpDec);
+    }
+
+    /// @dev Convenience wrappers that fetch prices internally (used where a single call is acceptable).
+    function _collateralValueUSDCached(Position storage pos) internal returns (uint256) {
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+        return _collateralValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+    }
+
+    function _debtValueUSDCached(Position storage pos) internal returns (uint256) {
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+        return _debtValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
     }
 
     function _accrueFee(uint256 principal, uint256 borrowTimestamp) internal view returns (uint256) {
@@ -404,6 +472,12 @@ contract CreditVault is Ownable {
 
     function _fxrpDebtWithFees(Position storage pos) internal view returns (uint256) {
         return _accrueFee(pos.fxrpDebt, pos.fxrpBorrowTimestamp);
+    }
+
+    /// @dev Returns (flrTotalDebt, fxrpTotalDebt) with fees.
+    function _getDebtWithFees(Position storage pos) internal view returns (uint256 flrTotal, uint256 fxrpTotal) {
+        flrTotal  = _flrDebtWithFees(pos);
+        fxrpTotal = _fxrpDebtWithFees(pos);
     }
 
     function _hasValidScore(Position storage pos) internal view returns (bool) {
