@@ -13,14 +13,16 @@ contract Deploy is Script {
         address fxrp = vm.envAddress("FXRP_ADDRESS");
         address teeExtensionRegistry = vm.envAddress("TEE_EXTENSION_REGISTRY");
         address teeMachineRegistry = vm.envAddress("TEE_MACHINE_REGISTRY");
+        // TEE signer: use TEE_SIGNER env if set, otherwise fall back to deployer
+        // (deployer is fine for local testing; production should use the actual TEE node address)
+        address teeSigner = vm.envOr("TEE_SIGNER", vm.addr(deployerPrivateKey));
 
         vm.startBroadcast(deployerPrivateKey);
 
         InstructionSender instructionSender = new InstructionSender(teeExtensionRegistry, teeMachineRegistry);
         console.log("InstructionSender:", address(instructionSender));
 
-        address deployer = vm.addr(deployerPrivateKey);
-        CreditVault vault = new CreditVault(ftsoV2, fxrp, deployer, 24 hours);
+        CreditVault vault = new CreditVault(ftsoV2, fxrp, teeSigner, 24 hours);
         console.log("CreditVault:", address(vault));
 
         SmartAccountReceiver receiver = new SmartAccountReceiver(address(vault), address(instructionSender), fxrp);
