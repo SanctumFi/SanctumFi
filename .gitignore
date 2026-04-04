@@ -3,3 +3,6 @@ docs/
 CLAUDE.md
 flare.md
 node_modules/
+dist/
+.env
+!.env.example
