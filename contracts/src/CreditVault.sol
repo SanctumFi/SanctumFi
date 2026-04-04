@@ -62,6 +62,9 @@ contract CreditVault is Ownable, ReentrancyGuard {
     /// @notice Protocol-owned FXRP liquidity (separate from user collateral).
     uint256 public poolFXRP;
 
+    /// @notice Smart Account Receiver authorized to call *For proxy functions.
+    address public smartAccountReceiver;
+
     // -------------------------------------------------------------------------
     // Events
     // -------------------------------------------------------------------------
@@ -90,6 +93,15 @@ contract CreditVault is Ownable, ReentrancyGuard {
     }
 
     // -------------------------------------------------------------------------
+    // Modifiers
+    // -------------------------------------------------------------------------
+
+    modifier onlySmartAccount() {
+        require(msg.sender == smartAccountReceiver, "CreditVault: not SAR");
+        _;
+    }
+
+    // -------------------------------------------------------------------------
     // Receive
     // -------------------------------------------------------------------------
 
@@ -106,6 +118,102 @@ contract CreditVault is Ownable, ReentrancyGuard {
     function fundPoolFXRP(uint256 amount) external onlyOwner {
         fxrp.safeTransferFrom(msg.sender, address(this), amount);
         poolFXRP += amount;
+    }
+
+    function setSmartAccountReceiver(address _sar) external onlyOwner {
+        smartAccountReceiver = _sar;
+    }
+
+    // -------------------------------------------------------------------------
+    // Smart Account proxy functions (called by SmartAccountReceiver on behalf of XRPL users)
+    // -------------------------------------------------------------------------
+
+    function depositFLRFor(address user) external payable onlySmartAccount nonReentrant {
+        positions[user].flrCollateral += msg.value;
+        emit CollateralDeposited(user, address(0), msg.value);
+    }
+
+    function depositFXRPFor(address user, uint256 amount) external onlySmartAccount {
+        fxrp.safeTransferFrom(msg.sender, address(this), amount);
+        positions[user].fxrpCollateral += amount;
+        emit CollateralDeposited(user, address(fxrp), amount);
+    }
+
+    function borrowFor(address user, address asset, uint256 amount) external onlySmartAccount nonReentrant {
+        Position storage pos = positions[user];
+
+        require(_hasValidScore(pos), "CreditVault: no valid score");
+        require(amount > 0, "CreditVault: zero amount");
+
+        (uint256 flrPrice, int8 flrDec) = _getFlrPriceUSD();
+        (uint256 xrpPrice, int8 xrpDec) = _getXrpPriceUSD();
+
+        if (asset == address(0)) {
+            require(poolFLR >= amount, "CreditVault: insufficient pool FLR");
+            pos.flrDebt += amount;
+            if (pos.flrBorrowTimestamp == 0) pos.flrBorrowTimestamp = block.timestamp;
+        } else {
+            require(asset == address(fxrp), "CreditVault: unknown asset");
+            require(poolFXRP >= amount, "CreditVault: insufficient pool FXRP");
+            pos.fxrpDebt += amount;
+            if (pos.fxrpBorrowTimestamp == 0) pos.fxrpBorrowTimestamp = block.timestamp;
+        }
+
+        uint256 colUSD  = _collateralValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+        uint256 debtUSD = _debtValueUSD(pos, flrPrice, flrDec, xrpPrice, xrpDec);
+        uint256 ltvBps  = getLtvBps(pos.creditScore);
+
+        require(colUSD * BASIS_POINTS >= debtUSD * ltvBps, "CreditVault: exceeds LTV");
+
+        // Borrowed funds sent to SmartAccountReceiver (holds on behalf of XRPL user).
+        if (asset == address(0)) {
+            poolFLR -= amount;
+            (bool ok,) = msg.sender.call{value: amount}("");
+            require(ok, "CreditVault: FLR transfer failed");
+        } else {
+            poolFXRP -= amount;
+            fxrp.safeTransfer(msg.sender, amount);
+        }
+
+        emit Borrowed(user, asset, amount);
+    }
+
+    function repayFor(address user, address asset, uint256 amount) external payable onlySmartAccount nonReentrant {
+        Position storage pos = positions[user];
+
+        if (asset == address(0)) {
+            require(pos.flrDebt > 0, "CreditVault: no FLR debt");
+
+            (uint256 totalDebt,) = _getDebtWithFees(pos);
+            uint256 repayAmount = msg.value > totalDebt ? totalDebt : msg.value;
+
+            pos.flrDebt = totalDebt - repayAmount;
+            pos.flrBorrowTimestamp = pos.flrDebt > 0 ? block.timestamp : 0;
+
+            poolFLR += repayAmount;
+
+            if (msg.value > repayAmount) {
+                (bool ok,) = msg.sender.call{value: msg.value - repayAmount}("");
+                require(ok, "CreditVault: refund failed");
+            }
+
+            emit Repaid(user, asset, repayAmount);
+        } else {
+            require(asset == address(fxrp), "CreditVault: unknown asset");
+            require(pos.fxrpDebt > 0, "CreditVault: no FXRP debt");
+
+            (, uint256 totalDebt) = _getDebtWithFees(pos);
+            uint256 repayAmount = amount > totalDebt ? totalDebt : amount;
+
+            fxrp.safeTransferFrom(msg.sender, address(this), repayAmount);
+
+            pos.fxrpDebt = totalDebt - repayAmount;
+            pos.fxrpBorrowTimestamp = pos.fxrpDebt > 0 ? block.timestamp : 0;
+
+            poolFXRP += repayAmount;
+
+            emit Repaid(user, asset, repayAmount);
+        }
     }
 
     // -------------------------------------------------------------------------
