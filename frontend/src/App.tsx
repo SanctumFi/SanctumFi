@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useXaman } from "./hooks/useXaman";
 import { useSmartAccount } from "./hooks/useSmartAccount";
 import { WalletConnect } from "./components/WalletConnect";
 import { Dashboard } from "./pages/Dashboard";
 import { Score } from "./pages/Score";
 import { Lend } from "./pages/Lend";
+import { LandingPage } from "./components/landing/LandingPage";
 
 type Tab = "dashboard" | "score" | "lend";
 
@@ -27,151 +28,6 @@ function GrainOverlay() {
         <rect width="100%" height="100%" filter="url(#veil-grain)" />
       </svg>
     </div>
-  );
-}
-
-/* ── Landing page with floating veil layers ── */
-interface LandingProps {
-  connected: boolean;
-  loading: boolean;
-  onConnect: () => void;
-}
-
-function Landing({ connected, loading, onConnect }: LandingProps) {
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    setMouse({
-      x: (e.clientX / window.innerWidth - 0.5) * 30,
-      y: (e.clientY / window.innerHeight - 0.5) * 30,
-    });
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [handleMouseMove]);
-
-  return (
-    <main
-      style={{
-        position: "relative",
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
-    >
-      {/* Floating veil layers with mouse parallax */}
-      <div
-        className="veil-layer veil-layer-1"
-        style={{
-          transform: `translate(${mouse.x * 0.4}px, ${mouse.y * 0.4}px)`,
-        }}
-      />
-      <div
-        className="veil-layer veil-layer-2"
-        style={{
-          transform: `translate(${mouse.x * -0.25}px, ${mouse.y * -0.25}px)`,
-        }}
-      />
-      <div
-        className="veil-layer veil-layer-3"
-        style={{
-          transform: `translate(${mouse.x * 0.6}px, ${mouse.y * 0.15}px)`,
-        }}
-      />
-
-      {/* Content */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 10,
-          textAlign: "center",
-          padding: "0 24px",
-          maxWidth: "700px",
-        }}
-      >
-        {/* Brand */}
-        <h1
-          className="reveal cormorant"
-          style={{
-            fontSize: "clamp(96px, 18vw, 220px)",
-            fontWeight: 300,
-            fontStyle: "italic",
-            letterSpacing: "0.04em",
-            color: "var(--c-ink)",
-            margin: 0,
-            lineHeight: 0.88,
-          }}
-        >
-          Veil
-        </h1>
-
-        {/* Tagline */}
-        <p
-          className="reveal delay-1"
-          style={{
-            fontFamily: "var(--f-body)",
-            fontSize: "9px",
-            fontWeight: 400,
-            letterSpacing: "0.38em",
-            textTransform: "uppercase",
-            color: "var(--c-slate)",
-            marginTop: "32px",
-            marginBottom: 0,
-          }}
-        >
-          Credit-scored lending on Flare
-        </p>
-
-        {/* Descriptor */}
-        <p
-          className="reveal delay-2"
-          style={{
-            fontFamily: "var(--f-body)",
-            fontSize: "12px",
-            fontWeight: 300,
-            color: "var(--c-stone)",
-            marginTop: "16px",
-            maxWidth: "360px",
-            marginLeft: "auto",
-            marginRight: "auto",
-            lineHeight: 1.7,
-          }}
-        >
-          Connect your XRPL wallet. Receive a TEE-attested credit score.
-          Borrow against tiered collateral ratios — no EVM wallet required.
-        </p>
-
-        {/* CTA */}
-        <div
-          className="reveal delay-3"
-          style={{ marginTop: "52px" }}
-        >
-          <button
-            className="btn-veil"
-            onClick={onConnect}
-            disabled={loading || connected}
-          >
-            <span>{loading ? "Connecting\u2026" : "Enter with Xaman"}</span>
-          </button>
-        </div>
-
-        {/* Bottom decorative rule */}
-        <div
-          className="reveal-fade delay-4"
-          style={{
-            width: "1px",
-            height: "64px",
-            background: "var(--c-stone)",
-            margin: "64px auto 0",
-            opacity: 0.5,
-          }}
-        />
-      </div>
-    </main>
   );
 }
 
@@ -256,8 +112,7 @@ function AppShell({
 
 /* ── Root ── */
 export default function App() {
-  const { xumm, xrplAddress, connected, loading, connect, disconnect } =
-    useXaman();
+  const { xumm, xrplAddress, connected, disconnect } = useXaman();
   const { personalAccount, sendPayment } = useSmartAccount(xumm, xrplAddress);
   const [tab, setTab] = useState<Tab>("dashboard");
 
@@ -274,7 +129,7 @@ export default function App() {
           onDisconnect={disconnect}
         />
       ) : (
-        <Landing connected={connected} loading={loading} onConnect={connect} />
+        <LandingPage />
       )}
     </>
   );
