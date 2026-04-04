@@ -1,45 +1,26 @@
-import { useState } from "react";
-import { ethers } from "ethers";
-import { coston2 } from "../config/chains";
-
 interface Props {
-  onConnect: (provider: ethers.BrowserProvider, address: string) => void;
+  xrplAddress: string | null;
+  connected: boolean;
+  loading: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
 }
 
-export function WalletConnect({ onConnect }: Props) {
-  const [address, setAddress] = useState<string | null>(null);
-
-  async function connect() {
-    if (!window.ethereum) { alert("Please install MetaMask"); return; }
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    try {
-      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: coston2.chainIdHex }] });
-    } catch (err: any) {
-      if (err?.code === 4902) {
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{ chainId: coston2.chainIdHex, chainName: coston2.name, rpcUrls: [coston2.rpcUrl], blockExplorerUrls: [coston2.blockExplorer], nativeCurrency: coston2.nativeCurrency }],
-        });
-      } else {
-        throw err;
-      }
-    }
-    const accounts = await provider.send("eth_requestAccounts", []);
-    setAddress(accounts[0]);
-    onConnect(provider, accounts[0]);
-    window.ethereum.on("accountsChanged", (accounts: string[]) => {
-      if (accounts.length > 0) {
-        const newProvider = new ethers.BrowserProvider(window.ethereum);
-        setAddress(accounts[0]);
-        onConnect(newProvider, accounts[0]);
-      }
-    });
-    window.ethereum.on("chainChanged", () => window.location.reload());
+export function WalletConnect({ xrplAddress, connected, loading, onConnect, onDisconnect }: Props) {
+  if (connected && xrplAddress) {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-gray-400 text-sm font-mono">{xrplAddress.slice(0, 8)}...{xrplAddress.slice(-6)}</span>
+        <button onClick={onDisconnect} className="bg-gray-700 hover:bg-gray-600 text-white text-sm py-2 px-4 rounded-lg">
+          Disconnect
+        </button>
+      </div>
+    );
   }
 
   return (
-    <button onClick={connect} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg">
-      {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connect Wallet"}
+    <button onClick={onConnect} disabled={loading} className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg">
+      {loading ? "Connecting..." : "Connect with Xaman"}
     </button>
   );
 }
