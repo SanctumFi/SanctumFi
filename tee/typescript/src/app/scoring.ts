@@ -69,28 +69,51 @@ function scoreIncomeStability(data: PlaidData): number {
   return Math.max(0, Math.min(250, Math.round((1 - cv) * 250)));
 }
 
+/** Essential category matching for legacy category[] field. */
+const ESSENTIAL_LEGACY = [
+  "Rent",
+  "Mortgage",
+  "Utilities",
+  "Groceries",
+  "Insurance",
+  "Transfer",
+  "Payment",
+  "Food and Drink",
+];
+
+/** Essential primary categories from Plaid's personal_finance_category v2. */
+const ESSENTIAL_PFC_PRIMARY = [
+  "RENT_AND_UTILITIES",
+  "FOOD_AND_DRINK",
+  "LOAN_PAYMENTS",
+  "MEDICAL",
+  "INSURANCE",
+  "TRANSPORTATION",
+  "HOME_IMPROVEMENT",
+];
+
+/** Check if a transaction is essential spending using both category formats. */
+function isEssential(t: PlaidData["transactions"][number]): boolean {
+  // Try legacy category[] first
+  if (t.category && t.category.length > 0) {
+    return t.category.some((c) =>
+      ESSENTIAL_LEGACY.some((e) => c.includes(e))
+    );
+  }
+  // Fall back to personal_finance_category (Plaid v2 / Sandbox)
+  if (t.personal_finance_category?.primary) {
+    return ESSENTIAL_PFC_PRIMARY.includes(t.personal_finance_category.primary);
+  }
+  return false;
+}
+
 /** Spending discipline (max 250): essential vs total spending ratio. */
 function scoreSpendingDiscipline(data: PlaidData): number {
   const spending = data.transactions.filter((t) => t.amount > 0);
   if (spending.length === 0) return 250;
 
-  const essentialCategories = [
-    "Rent",
-    "Mortgage",
-    "Utilities",
-    "Groceries",
-    "Insurance",
-    "Transfer",
-    "Payment",
-    "Food and Drink",
-  ];
-
   const essentialSpend = spending
-    .filter((t) =>
-      t.category?.some((c) =>
-        essentialCategories.some((e) => c.includes(e))
-      )
-    )
+    .filter(isEssential)
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalSpend = spending.reduce((sum, t) => sum + t.amount, 0);

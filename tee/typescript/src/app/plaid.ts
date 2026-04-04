@@ -18,11 +18,18 @@ export interface PlaidAccount {
   subtype: string;
 }
 
+export interface PlaidPersonalFinanceCategory {
+  primary: string;
+  detailed: string;
+  confidence_level: string;
+}
+
 export interface PlaidTransaction {
   amount: number;
   date: string;
   name: string;
-  category: string[];
+  category: string[] | null;
+  personal_finance_category: PlaidPersonalFinanceCategory | null;
   transaction_type: string;
 }
 
