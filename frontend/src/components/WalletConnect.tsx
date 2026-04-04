@@ -14,15 +14,27 @@ export function WalletConnect({ onConnect }: Props) {
     const provider = new ethers.BrowserProvider(window.ethereum);
     try {
       await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: coston2.chainIdHex }] });
-    } catch {
-      await window.ethereum.request({
-        method: "wallet_addEthereumChain",
-        params: [{ chainId: coston2.chainIdHex, chainName: coston2.name, rpcUrls: [coston2.rpcUrl], blockExplorerUrls: [coston2.blockExplorer], nativeCurrency: coston2.nativeCurrency }],
-      });
+    } catch (err: any) {
+      if (err?.code === 4902) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{ chainId: coston2.chainIdHex, chainName: coston2.name, rpcUrls: [coston2.rpcUrl], blockExplorerUrls: [coston2.blockExplorer], nativeCurrency: coston2.nativeCurrency }],
+        });
+      } else {
+        throw err;
+      }
     }
     const accounts = await provider.send("eth_requestAccounts", []);
     setAddress(accounts[0]);
     onConnect(provider, accounts[0]);
+    window.ethereum.on("accountsChanged", (accounts: string[]) => {
+      if (accounts.length > 0) {
+        const newProvider = new ethers.BrowserProvider(window.ethereum);
+        setAddress(accounts[0]);
+        onConnect(newProvider, accounts[0]);
+      }
+    });
+    window.ethereum.on("chainChanged", () => window.location.reload());
   }
 
   return (

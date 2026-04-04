@@ -22,8 +22,8 @@ export function usePosition(provider: ethers.BrowserProvider | null, address: st
     try {
       const vault = new ethers.Contract(CONTRACTS.creditVault, CREDIT_VAULT_ABI, provider);
       const pos = await vault.positions(address);
-      const [flrDebt, fxrpDebt] = await vault.getDebt.staticCall(address);
-      const healthFactor = await vault.getHealthFactor.staticCall(address);
+      const [flrDebt, fxrpDebt] = await vault.getDebt(address);
+      const healthFactor = await vault.getHealthFactor(address);
 
       setPosition({
         creditScore: pos.creditScore,
@@ -36,11 +36,16 @@ export function usePosition(provider: ethers.BrowserProvider | null, address: st
       });
     } catch (e) {
       console.error("Failed to fetch position:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [provider, address]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 15_000);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   return { position, loading, refresh };
 }

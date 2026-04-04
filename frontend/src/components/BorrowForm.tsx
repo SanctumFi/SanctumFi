@@ -13,7 +13,7 @@ export function BorrowForm({ provider, address, onSuccess }: Props) {
   async function fetchMax() {
     const vault = new ethers.Contract(CONTRACTS.creditVault, CREDIT_VAULT_ABI, provider);
     const assetAddr = asset === "FLR" ? ethers.ZeroAddress : CONTRACTS.fxrp;
-    try { const max = await vault.getMaxBorrow.staticCall(address, assetAddr); setMaxBorrow(ethers.formatEther(max)); } catch { setMaxBorrow("0"); }
+    try { const max = await vault.getMaxBorrow(address, assetAddr); setMaxBorrow(ethers.formatEther(max)); } catch { setMaxBorrow("0"); }
   }
 
   async function handleBorrow() {

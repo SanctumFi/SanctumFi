@@ -14,6 +14,7 @@ export function RepayForm({ provider, onSuccess }: Props) {
     try {
       const signer = await provider.getSigner();
       const vault = new ethers.Contract(CONTRACTS.creditVault, CREDIT_VAULT_ABI, signer);
+      // FXRP on Coston2 uses 18 decimals (standard ERC20 mock), so parseEther is correct here
       const value = ethers.parseEther(amount);
       const assetAddr = asset === "FLR" ? ethers.ZeroAddress : CONTRACTS.fxrp;
       if (asset === "FLR") {

@@ -14,6 +14,7 @@ export function DepositForm({ provider, onSuccess }: Props) {
     try {
       const signer = await provider.getSigner();
       const vault = new ethers.Contract(CONTRACTS.creditVault, CREDIT_VAULT_ABI, signer);
+      // FXRP on Coston2 uses 18 decimals (standard ERC20 mock), so parseEther is correct here
       const value = ethers.parseEther(amount);
       if (asset === "FLR") {
         await (await vault.depositFLR({ value })).wait();

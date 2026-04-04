@@ -14,6 +14,8 @@ export function Score({ provider, address }: Props) {
   async function handleRequestScore() {
     setError(null);
     try {
+      // HACKATHON DEMO: plaintext token for local TEE mode
+      // Production: encrypt with TEE public key via ECIES before submission
       const payload = JSON.stringify({
         plaid_access_token: "access-sandbox-de3ce8ef-33f8-452c-a685-8671031fc0f6",
         user_address: address,

@@ -18,8 +18,8 @@ export function usePrices(provider: ethers.BrowserProvider | null) {
         const ftso = new ethers.Contract(CONTRACTS.ftsoV2, FTSOV2_ABI, provider);
         const feedIds = [FLR_USD_FEED_ID, XRP_USD_FEED_ID];
         const [values, decimals, timestamp] = await ftso.getFeedsById.staticCall(feedIds);
-        const flrUsd = Number(values[0]) / 10 ** Number(decimals[0]);
-        const xrpUsd = Number(values[1]) / 10 ** Number(decimals[1]);
+        const flrUsd = Number(values[0]) * Math.pow(10, -Number(decimals[0]));
+        const xrpUsd = Number(values[1]) * Math.pow(10, -Number(decimals[1]));
         setPrices({ flrUsd, xrpUsd, timestamp: Number(timestamp) });
       } catch (e) {
         console.error("Failed to fetch FTSO prices:", e);
