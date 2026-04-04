@@ -187,43 +187,185 @@ describeOrSkip("Credit score tier coverage (synthetic data)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Live sandbox banks — see what real Plaid Sandbox data scores
+// Live sandbox profiles — fetch real Plaid data then apply realistic
+// financial transformations to simulate different user profiles.
 // ---------------------------------------------------------------------------
-describeOrSkip("Live scores across sandbox banks", () => {
-  const banks = [
-    { id: "ins_109508", name: "First Platypus Bank" },
-    { id: "ins_109509", name: "First Gingham Credit Union" },
-    { id: "ins_109510", name: "Tattersall Federal Credit Union" },
-    { id: "ins_109511", name: "Tartan Bank" },
-  ];
+describeOrSkip("Live sandbox: simulated user profiles", () => {
+  let baseData: PlaidData;
 
-  for (const bank of banks) {
-    it(`${bank.name} (${bank.id})`, async () => {
-      const token = await createAccessToken(bank.id);
-      const data = await fetchPlaidData(token);
-      const score = computeCreditScore(data);
+  beforeAll(async () => {
+    const token = await createAccessToken("ins_109508");
+    baseData = await fetchPlaidData(token);
+    console.log(`\n  Fetched base sandbox data: ${baseData.accounts.length} accounts, ${baseData.transactions.length} transactions`);
+  }, 20000);
 
-      const encoded = encodeCreditScoreResult(
-        "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF",
-        score.total,
-        Math.floor(Date.now() / 1000)
-      );
-
-      // Verify ABI round-trip
-      const [, decodedScore] = decodeAbiParameters(
-        [{ type: "address" }, { type: "uint256" }, { type: "uint256" }],
-        encoded as `0x${string}`
-      );
-
-      console.log(
-        `\n  ${bank.name}: ${score.total}/1000 → ${tierName(score.total)}` +
-        `\n    [BH:${score.balanceHealth} IS:${score.incomeStability} SD:${score.spendingDiscipline} AA:${score.accountAge}]` +
-        `\n    Accounts: ${data.accounts.length}, Transactions: ${data.transactions.length}`
-      );
-
-      expect(Number(decodedScore)).toBe(score.total);
-      expect(score.total).toBeGreaterThanOrEqual(0);
-      expect(score.total).toBeLessThanOrEqual(1000);
-    }, 20000);
+  function cloneData(data: PlaidData): PlaidData {
+    return JSON.parse(JSON.stringify(data));
   }
+
+  it("Platinum: high earner with big savings (sandbox data + boosted balances + salary deposits)", () => {
+    const data = cloneData(baseData);
+
+    // Boost depository balances to simulate wealthy user
+    for (const acc of data.accounts) {
+      if (acc.type === "depository") {
+        acc.balances.available = (acc.balances.available || 0) * 50 + 30000;
+        acc.balances.current = acc.balances.available;
+      }
+    }
+
+    // Add 12 months of stable high salary
+    const months = ["2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09",
+                     "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"];
+    for (const m of months) {
+      data.transactions.push({
+        amount: -12000, date: `${m}-01`, name: "Direct Deposit - Employer",
+        category: null,
+        personal_finance_category: { primary: "INCOME", detailed: "INCOME_WAGES", confidence_level: "HIGH" },
+        transaction_type: "special",
+      });
+    }
+
+    // Add heavy essential spending to dominate the discipline ratio
+    for (const m of ["2026-01", "2026-02", "2026-03"]) {
+      data.transactions.push(
+        { amount: 3000, date: `${m}-01`, name: "Rent Payment", category: null,
+          personal_finance_category: { primary: "RENT_AND_UTILITIES", detailed: "RENT_AND_UTILITIES_RENT", confidence_level: "HIGH" },
+          transaction_type: "place" },
+        { amount: 800, date: `${m}-10`, name: "Groceries", category: null,
+          personal_finance_category: { primary: "FOOD_AND_DRINK", detailed: "FOOD_AND_DRINK_GROCERIES", confidence_level: "HIGH" },
+          transaction_type: "place" },
+        { amount: 500, date: `${m}-15`, name: "Insurance", category: null,
+          personal_finance_category: { primary: "INSURANCE", detailed: "INSURANCE_AUTO", confidence_level: "HIGH" },
+          transaction_type: "place" },
+      );
+    }
+
+    const score = computeCreditScore(data);
+    const encoded = encodeCreditScoreResult("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", score.total, Math.floor(Date.now() / 1000));
+    const [, decodedScore] = decodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "uint256" }],
+      encoded as `0x${string}`
+    );
+
+    console.log(
+      `\n  Platinum (boosted): ${score.total}/1000 → ${tierName(score.total)}` +
+      `\n    [BH:${score.balanceHealth} IS:${score.incomeStability} SD:${score.spendingDiscipline} AA:${score.accountAge}]`
+    );
+
+    expect(Number(decodedScore)).toBe(score.total);
+    expect(score.total).toBeGreaterThanOrEqual(800);
+  });
+
+  it("Gold: stable income, moderate savings (sandbox data + salary normalization)", () => {
+    const data = cloneData(baseData);
+
+    // Boost checking balance for solid balance health
+    for (const acc of data.accounts) {
+      if (acc.type === "depository" && acc.subtype === "checking") {
+        acc.balances.available = 15000;
+        acc.balances.current = 15200;
+      }
+    }
+
+    // Add 6 months of stable mid-range salary
+    const months = ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"];
+    for (const m of months) {
+      data.transactions.push({
+        amount: -5500, date: `${m}-15`, name: "Payroll",
+        category: null,
+        personal_finance_category: { primary: "INCOME", detailed: "INCOME_WAGES", confidence_level: "HIGH" },
+        transaction_type: "special",
+      });
+    }
+
+    // Add essential spending to push discipline up
+    for (const m of ["2026-01", "2026-02", "2026-03"]) {
+      data.transactions.push(
+        { amount: 1800, date: `${m}-01`, name: "Rent Payment", category: null,
+          personal_finance_category: { primary: "RENT_AND_UTILITIES", detailed: "RENT_AND_UTILITIES_RENT", confidence_level: "HIGH" },
+          transaction_type: "place" },
+        { amount: 400, date: `${m}-10`, name: "Groceries", category: null,
+          personal_finance_category: { primary: "FOOD_AND_DRINK", detailed: "FOOD_AND_DRINK_GROCERIES", confidence_level: "HIGH" },
+          transaction_type: "place" },
+      );
+    }
+
+    const score = computeCreditScore(data);
+    const encoded = encodeCreditScoreResult("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", score.total, Math.floor(Date.now() / 1000));
+    const [, decodedScore] = decodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "uint256" }],
+      encoded as `0x${string}`
+    );
+
+    console.log(
+      `\n  Gold (moderate):   ${score.total}/1000 → ${tierName(score.total)}` +
+      `\n    [BH:${score.balanceHealth} IS:${score.incomeStability} SD:${score.spendingDiscipline} AA:${score.accountAge}]`
+    );
+
+    expect(Number(decodedScore)).toBe(score.total);
+    expect(score.total).toBeGreaterThanOrEqual(600);
+    expect(score.total).toBeLessThan(800);
+  });
+
+  it("Silver: raw sandbox data as-is (average profile)", () => {
+    const data = cloneData(baseData);
+    const score = computeCreditScore(data);
+
+    const encoded = encodeCreditScoreResult("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", score.total, Math.floor(Date.now() / 1000));
+    const [, decodedScore] = decodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "uint256" }],
+      encoded as `0x${string}`
+    );
+
+    console.log(
+      `\n  Silver (raw data): ${score.total}/1000 → ${tierName(score.total)}` +
+      `\n    [BH:${score.balanceHealth} IS:${score.incomeStability} SD:${score.spendingDiscipline} AA:${score.accountAge}]`
+    );
+
+    expect(Number(decodedScore)).toBe(score.total);
+    expect(score.total).toBeGreaterThanOrEqual(400);
+    expect(score.total).toBeLessThan(600);
+  });
+
+  it("Bronze: stripped down sandbox data (struggling profile)", () => {
+    const data = cloneData(baseData);
+
+    // Keep only credit card accounts, drop depository
+    data.accounts = data.accounts.filter((a) => a.type !== "depository");
+    // Add a near-empty checking account
+    data.accounts.push({
+      account_id: "broke",
+      balances: { available: 45, current: 45, iso_currency_code: "USD" },
+      name: "Checking", type: "depository", subtype: "checking",
+    });
+
+    // Remove all income transactions (negative amounts)
+    data.transactions = data.transactions.filter((t) => t.amount > 0);
+
+    // Add only discretionary spending
+    for (const d of ["2026-03-01", "2026-03-10", "2026-03-18"]) {
+      data.transactions.push({
+        amount: 350, date: d, name: "Online Shopping",
+        category: null,
+        personal_finance_category: { primary: "GENERAL_MERCHANDISE", detailed: "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES", confidence_level: "LOW" },
+        transaction_type: "place",
+      });
+    }
+
+    const score = computeCreditScore(data);
+    const encoded = encodeCreditScoreResult("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", score.total, Math.floor(Date.now() / 1000));
+    const [, decodedScore] = decodeAbiParameters(
+      [{ type: "address" }, { type: "uint256" }, { type: "uint256" }],
+      encoded as `0x${string}`
+    );
+
+    console.log(
+      `\n  Bronze (stripped): ${score.total}/1000 → ${tierName(score.total)}` +
+      `\n    [BH:${score.balanceHealth} IS:${score.incomeStability} SD:${score.spendingDiscipline} AA:${score.accountAge}]`
+    );
+
+    expect(Number(decodedScore)).toBe(score.total);
+    expect(score.total).toBeLessThan(400);
+  });
 });
