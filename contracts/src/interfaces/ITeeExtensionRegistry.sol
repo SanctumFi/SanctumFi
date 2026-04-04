@@ -11,8 +11,14 @@ struct TeeInstructionParams {
 }
 
 interface ITeeExtensionRegistry {
-    function sendInstruction(
-        uint256 extensionId,
-        TeeInstructionParams calldata params
-    ) external payable;
+    function sendInstructions(
+        address[] memory _teeIds,
+        TeeInstructionParams memory _instructionParams
+    ) external payable returns (bytes32 _instructionId);
+
+    function getTeeExtensionInstructionsSender(
+        uint256 _extensionId
+    ) external view returns (address);
+
+    function extensionsCounter() external view returns (uint256);
 }

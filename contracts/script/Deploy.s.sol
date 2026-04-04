@@ -11,12 +11,12 @@ contract Deploy is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address ftsoV2 = vm.envAddress("FTSOV2_ADDRESS");
         address fxrp = vm.envAddress("FXRP_ADDRESS");
-        address teeRegistry = vm.envAddress("TEE_EXTENSION_REGISTRY");
-        uint256 extensionId = vm.envUint("TEE_EXTENSION_ID");
+        address teeExtensionRegistry = vm.envAddress("TEE_EXTENSION_REGISTRY");
+        address teeMachineRegistry = vm.envAddress("TEE_MACHINE_REGISTRY");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        InstructionSender instructionSender = new InstructionSender(teeRegistry, extensionId);
+        InstructionSender instructionSender = new InstructionSender(teeExtensionRegistry, teeMachineRegistry);
         console.log("InstructionSender:", address(instructionSender));
 
         address deployer = vm.addr(deployerPrivateKey);
