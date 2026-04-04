@@ -37,12 +37,56 @@ export function BorrowForm({ personalAccount, sendPayment, onSuccess }: Props) {
   }
 
   return (
-    <div className="bg-gray-900 rounded-xl p-6 space-y-4">
-      <h3 className="text-lg font-bold text-white">Borrow</h3>
-      <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" className="w-full bg-gray-800 text-white p-3 rounded" />
-      <button onClick={fetchMax} className="text-orange-400 text-sm underline">Check max borrow {maxBorrow !== null && `(${Number(maxBorrow).toFixed(4)} FLR)`}</button>
-      <button onClick={handleBorrow} disabled={loading || !amount} className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-white py-3 rounded-lg font-bold">
-        {loading ? "Sign in Xaman..." : "Borrow"}
+    <div className="veil-module">
+      <p className="section-num">II.</p>
+      <h3
+        className="cormorant"
+        style={{
+          fontSize: "24px",
+          fontWeight: 300,
+          color: "var(--c-ink)",
+          margin: "0 0 12px",
+          lineHeight: 1.1,
+        }}
+      >
+        Borrow
+      </h3>
+      <p
+        style={{
+          fontSize: "11px",
+          color: "var(--c-stone)",
+          lineHeight: 1.65,
+          margin: "0 0 36px",
+        }}
+      >
+        Borrow against your deposited collateral within your credit tier.
+      </p>
+
+      <div className="field-group">
+        <label className="field-label">Amount (FLR)</label>
+        <input
+          type="number"
+          className="field-input"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0.00"
+        />
+      </div>
+
+      <div style={{ marginBottom: "28px" }}>
+        <button className="btn-link" onClick={fetchMax}>
+          {maxBorrow !== null
+            ? `Max: ${Number(maxBorrow).toFixed(4)} FLR`
+            : "Check max borrow"}
+        </button>
+      </div>
+
+      <button
+        className="btn-veil btn-veil-full"
+        onClick={handleBorrow}
+        disabled={loading || !amount}
+      >
+        <span>{loading ? "Sign in Xaman\u2026" : "Borrow"}</span>
       </button>
     </div>
   );

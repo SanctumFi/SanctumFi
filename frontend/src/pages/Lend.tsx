@@ -14,17 +14,32 @@ export function Lend({ personalAccount, sendPayment }: Props) {
 
   if (!hasScore) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-400 text-lg">You need a credit score first.</p>
-        <p className="text-gray-500">Go to the Score tab to compute yours.</p>
+      <div className="state-message reveal">
+        <p>Score required</p>
+        <p>
+          Navigate to Credit Score to compute yours before lending.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div
+      className="reveal"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: "1px",
+        background: "var(--c-mist)",
+        border: "1px solid var(--c-mist)",
+      }}
+    >
       <DepositForm sendPayment={sendPayment} onSuccess={refresh} />
-      <BorrowForm personalAccount={personalAccount!} sendPayment={sendPayment} onSuccess={refresh} />
+      <BorrowForm
+        personalAccount={personalAccount!}
+        sendPayment={sendPayment}
+        onSuccess={refresh}
+      />
       <RepayForm sendPayment={sendPayment} onSuccess={refresh} />
     </div>
   );

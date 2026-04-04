@@ -15,17 +15,57 @@ export function RepayForm({ sendPayment, onSuccess }: Props) {
     try {
       const drops = (parseFloat(amount) * 1_000_000).toFixed(0);
       const memo = strToHex(`repay:${amount}`);
-      await sendPayment(memo, drops, `FlareScore: Repay ${amount}`);
-      setAmount(""); onSuccess();
-    } finally { setLoading(false); }
+      await sendPayment(memo, drops, `Veil: Repay ${amount}`);
+      setAmount("");
+      onSuccess();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="bg-gray-900 rounded-xl p-6 space-y-4">
-      <h3 className="text-lg font-bold text-white">Repay</h3>
-      <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount (XRP)" className="w-full bg-gray-800 text-white p-3 rounded" />
-      <button onClick={handleRepay} disabled={loading || !amount} className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white py-3 rounded-lg font-bold">
-        {loading ? "Sign in Xaman..." : "Repay"}
+    <div className="veil-module">
+      <p className="section-num">III.</p>
+      <h3
+        className="cormorant"
+        style={{
+          fontSize: "24px",
+          fontWeight: 300,
+          color: "var(--c-ink)",
+          margin: "0 0 12px",
+          lineHeight: 1.1,
+        }}
+      >
+        Repay
+      </h3>
+      <p
+        style={{
+          fontSize: "11px",
+          color: "var(--c-stone)",
+          lineHeight: 1.65,
+          margin: "0 0 36px",
+        }}
+      >
+        Return XRP to reduce your outstanding debt and improve your health factor.
+      </p>
+
+      <div className="field-group">
+        <label className="field-label">Amount (XRP)</label>
+        <input
+          type="number"
+          className="field-input"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0.00"
+        />
+      </div>
+
+      <button
+        className="btn-veil btn-veil-full"
+        onClick={handleRepay}
+        disabled={loading || !amount}
+      >
+        <span>{loading ? "Sign in Xaman\u2026" : "Repay"}</span>
       </button>
     </div>
   );

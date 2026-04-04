@@ -6,16 +6,42 @@ export function HealthBar({ value }: Props) {
   const hf = Number(formatEther(value));
   const isMax = hf > 100;
   const display = isMax ? "\u221e" : hf.toFixed(2);
-  let color = "bg-green-500";
-  if (hf < 1.0) color = "bg-red-500";
-  else if (hf < 1.5) color = "bg-yellow-500";
-  const width = isMax ? 100 : Math.min(100, (hf / 3) * 100);
+  const fillClass = hf < 1.0 ? "is-danger" : hf < 1.5 ? "is-warning" : "";
+  const fillWidth = isMax ? 100 : Math.min(100, (hf / 3) * 100);
 
   return (
     <div>
-      <p className={`text-2xl font-bold ${hf < 1 ? "text-red-400" : "text-green-400"}`}>{display}</p>
-      <div className="w-full bg-gray-700 rounded-full h-2 mt-1">
-        <div className={`${color} h-2 rounded-full`} style={{ width: `${width}%` }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          marginBottom: "10px",
+        }}
+      >
+        <p className="label">Health Factor</p>
+        <p
+          className="cormorant"
+          style={{
+            fontSize: "28px",
+            fontWeight: 300,
+            lineHeight: 1,
+            color:
+              hf < 1
+                ? "var(--c-danger)"
+                : hf < 1.5
+                ? "#C0A870"
+                : "var(--c-gold)",
+          }}
+        >
+          {display}
+        </p>
+      </div>
+      <div className="health-track">
+        <div
+          className={`health-fill ${fillClass}`}
+          style={{ width: `${fillWidth}%` }}
+        />
       </div>
     </div>
   );

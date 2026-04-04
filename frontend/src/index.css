@@ -1,1 +1,432 @@
 @import "tailwindcss";
+
+/* ═══════════════════════════════════════════
+   VEIL — Design System
+   Neoclassical Cryptic Minimalism
+═══════════════════════════════════════════ */
+
+:root {
+  /* Palette */
+  --c-white:     #FFFFFF;
+  --c-alabaster: #F7F6F4;
+  --c-mist:      #EAEAEA;
+  --c-stone:     #D0D0D0;
+  --c-slate:     #9A9A9A;
+  --c-shadow:    #4A4A4A;
+  --c-ink:       #1A1A1A;
+  --c-gold:      #C0B283;
+  --c-gold-dim:  #A09068;
+  --c-danger:    #9A6A6A;
+  --c-danger-bg: #F5EDED;
+
+  /* Typography */
+  --f-display: 'Cormorant Garamond', 'Garamond', serif;
+  --f-body:    'Instrument Sans', 'Helvetica Neue', sans-serif;
+
+  /* Timing */
+  --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Reset & Base ─── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--c-alabaster);
+  color: var(--c-shadow);
+  font-family: var(--f-body);
+  font-weight: 300;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ─── Grain Overlay ─── */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.038;
+  mix-blend-mode: multiply;
+}
+.grain-overlay svg { width: 100%; height: 100%; display: block; }
+
+/* ─── Veil Layers (Landing) ─── */
+.veil-layer {
+  position: absolute;
+  border-radius: 60% 40% 50% 50% / 50% 60% 40% 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+.veil-layer-1 {
+  width: 75%;
+  height: 130%;
+  top: -25%;
+  left: -8%;
+  background: rgba(192, 178, 131, 0.12);
+  animation: veil-float-1 14s ease-in-out infinite alternate;
+}
+
+.veil-layer-2 {
+  width: 55%;
+  height: 90%;
+  top: 20%;
+  right: -5%;
+  background: rgba(220, 215, 200, 0.18);
+  animation: veil-float-2 18s ease-in-out infinite alternate;
+}
+
+.veil-layer-3 {
+  width: 45%;
+  height: 55%;
+  bottom: -5%;
+  left: 25%;
+  background: rgba(192, 178, 131, 0.08);
+  animation: veil-float-3 11s ease-in-out infinite alternate;
+}
+
+@keyframes veil-float-1 {
+  from { transform: translateY(0) rotate(-3deg) scale(1); }
+  to   { transform: translateY(-55px) rotate(-0.5deg) scale(1.04); }
+}
+
+@keyframes veil-float-2 {
+  from { transform: translateY(0) rotate(2deg) scale(1); }
+  to   { transform: translateY(45px) rotate(3.5deg) scale(0.96); }
+}
+
+@keyframes veil-float-3 {
+  from { transform: translateY(0) rotate(-1deg) scale(1); }
+  to   { transform: translateY(-25px) rotate(1.5deg) scale(1.05); }
+}
+
+/* ─── Entrance Animations ─── */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes reveal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.reveal {
+  opacity: 0;
+  animation: reveal-up 0.9s var(--ease-reveal) forwards;
+}
+.reveal-fade {
+  opacity: 0;
+  animation: reveal-fade 0.7s ease forwards;
+}
+.delay-1 { animation-delay: 0.12s; }
+.delay-2 { animation-delay: 0.24s; }
+.delay-3 { animation-delay: 0.36s; }
+.delay-4 { animation-delay: 0.52s; }
+.delay-5 { animation-delay: 0.68s; }
+
+/* ─── Typography Helpers ─── */
+.cormorant { font-family: var(--f-display); }
+.instrument { font-family: var(--f-body); }
+
+.label {
+  font-family: var(--f-body);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--c-slate);
+}
+
+.score-mono {
+  font-family: var(--f-display);
+  font-weight: 300;
+  line-height: 1;
+  color: var(--c-ink);
+}
+
+/* ─── Button: Primary (Chiseled fill) ─── */
+.btn-veil {
+  display: inline-block;
+  position: relative;
+  padding: 13px 52px;
+  border: 1px solid var(--c-gold);
+  background: transparent;
+  color: var(--c-shadow);
+  font-family: var(--f-body);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  cursor: pointer;
+  overflow: hidden;
+  transition: color 0.55s var(--ease-reveal);
+  white-space: nowrap;
+}
+
+.btn-veil::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--c-gold);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.5s var(--ease-reveal);
+}
+
+.btn-veil:hover:not(:disabled)::after { transform: scaleY(1); }
+.btn-veil:hover:not(:disabled) { color: var(--c-white); }
+
+.btn-veil > span {
+  position: relative;
+  z-index: 1;
+}
+
+.btn-veil:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-veil-sm {
+  padding: 9px 32px;
+  font-size: 8px;
+}
+
+.btn-veil-full { width: 100%; }
+
+/* ─── Button: Ghost ─── */
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--c-slate);
+  font-family: var(--f-body);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+.btn-ghost:hover { color: var(--c-shadow); }
+
+/* ─── Button: Text Link ─── */
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--c-gold);
+  font-family: var(--f-body);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  border-bottom: 1px solid var(--c-gold);
+  padding-bottom: 1px;
+  transition: color 0.2s, border-color 0.2s;
+}
+.btn-link:hover { color: var(--c-gold-dim); border-color: var(--c-gold-dim); }
+
+/* ─── Nav Tab ─── */
+.nav-tab {
+  font-family: var(--f-body);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--c-stone);
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 2px 0;
+  margin: 0 20px;
+  cursor: pointer;
+  transition: color 0.25s, border-color 0.25s;
+}
+.nav-tab:hover { color: var(--c-slate); }
+.nav-tab.active {
+  color: var(--c-shadow);
+  border-bottom-color: var(--c-gold);
+}
+
+/* ─── Header ─── */
+.veil-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--c-alabaster);
+  border-bottom: 1px solid var(--c-mist);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 48px;
+}
+
+.veil-wordmark {
+  font-family: var(--f-display);
+  font-size: 22px;
+  font-weight: 300;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  color: var(--c-ink);
+  line-height: 1;
+}
+
+/* ─── Form Fields ─── */
+.field-group { margin-bottom: 32px; }
+
+.field-label {
+  display: block;
+  font-family: var(--f-body);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--c-slate);
+  margin-bottom: 10px;
+}
+
+.field-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--c-mist);
+  padding: 8px 0;
+  font-family: var(--f-body);
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--c-shadow);
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.field-input:focus { border-bottom-color: var(--c-gold); }
+.field-input::placeholder { color: var(--c-stone); }
+
+/* ─── Module (Card replacement) ─── */
+.veil-module {
+  padding: 40px;
+  border: 1px solid var(--c-mist);
+  background: var(--c-white);
+}
+
+/* ─── Divider ─── */
+.veil-rule {
+  width: 100%;
+  height: 1px;
+  background: var(--c-mist);
+  border: none;
+  margin: 0;
+}
+
+/* ─── Data Display ─── */
+.data-row {
+  margin-bottom: 28px;
+}
+
+.data-val-lg {
+  font-family: var(--f-display);
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--c-ink);
+  line-height: 1.1;
+}
+
+.data-val-md {
+  font-family: var(--f-display);
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--c-shadow);
+  line-height: 1.2;
+}
+
+.data-val-sm {
+  font-family: var(--f-body);
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--c-shadow);
+}
+
+.data-sub {
+  font-family: var(--f-body);
+  font-size: 10px;
+  font-weight: 300;
+  color: var(--c-stone);
+  margin-top: 2px;
+}
+
+/* ─── Health Bar ─── */
+.health-track {
+  width: 100%;
+  height: 1px;
+  background: var(--c-mist);
+  margin-top: 10px;
+}
+
+.health-fill {
+  height: 1px;
+  background: var(--c-gold);
+  transition: width 0.8s var(--ease-reveal);
+}
+.health-fill.is-warning { background: #C0A870; }
+.health-fill.is-danger  { background: var(--c-danger); }
+
+/* ─── Tier Colors ─── */
+.tier-platinum { color: var(--c-gold); }
+.tier-gold     { color: #B89A5A; }
+.tier-silver   { color: var(--c-slate); }
+.tier-bronze   { color: #8A6A50; }
+
+/* ─── State messages ─── */
+.state-message {
+  text-align: center;
+  padding: 80px 24px;
+}
+.state-message p:first-child {
+  font-family: var(--f-display);
+  font-size: 22px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--c-slate);
+  margin: 0 0 8px;
+}
+.state-message p:last-child {
+  font-size: 11px;
+  color: var(--c-stone);
+  letter-spacing: 0.05em;
+}
+
+/* ─── Error text ─── */
+.error-text {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--c-danger);
+  margin-top: 12px;
+}
+
+/* ─── Section number accent ─── */
+.section-num {
+  font-family: var(--f-display);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--c-stone);
+  margin-bottom: 16px;
+}
+
+/* ─── Wallet address chip ─── */
+.wallet-chip {
+  font-family: var(--f-body);
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+  color: var(--c-slate);
+}

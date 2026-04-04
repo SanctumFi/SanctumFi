@@ -26,15 +26,64 @@ export function Score({ xrplAddress, personalAccount, sendPayment }: Props) {
   const hasScore = position && position.creditScore > 0n;
 
   return (
-    <div className="space-y-6">
-      {hasScore && <ScoreDisplay score={Number(position.creditScore)} />}
-      <div className="bg-gray-900 rounded-xl p-6 text-center space-y-4">
-        <h3 className="text-lg font-bold text-white">{hasScore ? "Update Your Score" : "Get Your Credit Score"}</h3>
-        <p className="text-gray-400 text-sm">Your banking data is processed privately inside a Trusted Execution Environment. Only the score is published onchain.</p>
-        <button onClick={handleRequestScore} disabled={requesting} className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white py-3 px-8 rounded-lg font-bold">
-          {requesting ? "Sign in Xaman..." : "Compute Credit Score"}
+    <div>
+      {/* Score monument */}
+      {hasScore && (
+        <div className="reveal">
+          <ScoreDisplay score={Number(position.creditScore)} />
+        </div>
+      )}
+
+      {/* Action module */}
+      <div
+        className={`veil-module reveal${hasScore ? " delay-1" : ""}`}
+        style={{ marginTop: hasScore ? "48px" : "0" }}
+      >
+        {/* Section label */}
+        <p className="section-num">
+          {hasScore ? "II." : "I."}
+        </p>
+
+        <h2
+          className="cormorant"
+          style={{
+            fontSize: "28px",
+            fontWeight: 300,
+            color: "var(--c-ink)",
+            margin: "0 0 16px",
+            lineHeight: 1.1,
+          }}
+        >
+          {hasScore ? "Update your Score" : "Compute your Credit Score"}
+        </h2>
+
+        <p
+          style={{
+            fontSize: "12px",
+            color: "var(--c-slate)",
+            maxWidth: "480px",
+            lineHeight: 1.75,
+            margin: "0 0 40px",
+          }}
+        >
+          Your banking data is processed privately inside a Trusted Execution
+          Environment. Only the resulting score is published on-chain — raw
+          financial data never touches the blockchain.
+        </p>
+
+        <button
+          className="btn-veil"
+          onClick={handleRequestScore}
+          disabled={requesting}
+        >
+          <span>
+            {requesting ? "Sign in Xaman\u2026" : "Compute Credit Score"}
+          </span>
         </button>
-        {(error || localError) && <p className="text-red-400 text-sm">{error || localError}</p>}
+
+        {(error || localError) && (
+          <p className="error-text">{error || localError}</p>
+        )}
       </div>
     </div>
   );

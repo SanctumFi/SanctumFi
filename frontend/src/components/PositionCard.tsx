@@ -5,48 +5,127 @@ import { HealthBar } from "./HealthBar";
 
 interface Props { position: Position; prices: Prices | null; }
 
-function tierName(score: bigint): string {
+function tierMeta(score: bigint) {
   const s = Number(score);
-  if (s >= 800) return "Platinum"; if (s >= 600) return "Gold"; if (s >= 400) return "Silver"; return "Bronze";
-}
-function tierLtv(score: bigint): string {
-  const s = Number(score);
-  if (s >= 800) return "80%"; if (s >= 600) return "120%"; if (s >= 400) return "150%"; return "200%";
+  if (s >= 800) return { name: "Platinum", ltv: "80%",  cls: "tier-platinum" };
+  if (s >= 600) return { name: "Gold",     ltv: "120%", cls: "tier-gold" };
+  if (s >= 400) return { name: "Silver",   ltv: "150%", cls: "tier-silver" };
+  return               { name: "Bronze",   ltv: "200%", cls: "tier-bronze" };
 }
 
 export function PositionCard({ position, prices }: Props) {
   const fmt = (v: bigint) => Number(formatEther(v)).toFixed(4);
+  const { name, ltv, cls } = tierMeta(position.creditScore);
 
   return (
-    <div className="bg-gray-900 rounded-xl p-6 space-y-4">
-      <h2 className="text-xl font-bold text-white">Your Position</h2>
-      <div className="grid grid-cols-2 gap-4">
+    <div>
+      {/* ── Score + tier ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "40px",
+          paddingBottom: "48px",
+        }}
+      >
         <div>
-          <p className="text-gray-400 text-sm">Credit Score</p>
-          <p className="text-2xl font-bold text-white">{position.creditScore.toString()}</p>
-          <p className="text-orange-400 text-sm">{tierName(position.creditScore)} — {tierLtv(position.creditScore)} LTV</p>
+          <p className="label" style={{ marginBottom: "12px" }}>
+            Credit Score
+          </p>
+          <p
+            className={`cormorant ${cls}`}
+            style={{
+              fontSize: "clamp(72px, 11vw, 140px)",
+              fontWeight: 300,
+              lineHeight: 0.88,
+              margin: 0,
+            }}
+          >
+            {position.creditScore.toString()}
+          </p>
         </div>
-        <div>
-          <p className="text-gray-400 text-sm">Health Factor</p>
-          <HealthBar value={position.healthFactor} />
+
+        <div style={{ paddingBottom: "4px" }}>
+          <p
+            className={`cormorant ${cls}`}
+            style={{
+              fontSize: "24px",
+              fontWeight: 300,
+              fontStyle: "italic",
+              lineHeight: 1,
+              margin: "0 0 6px",
+            }}
+          >
+            {name}
+          </p>
+          <p className="label">{ltv} LTV</p>
         </div>
-        <div>
-          <p className="text-gray-400 text-sm">FLR Collateral</p>
-          <p className="text-white">{fmt(position.flrCollateral)} FLR</p>
-          {prices && <p className="text-gray-500 text-xs">${(Number(formatEther(position.flrCollateral)) * prices.flrUsd).toFixed(2)}</p>}
+      </div>
+
+      {/* ── Health factor ── */}
+      <HealthBar value={position.healthFactor} />
+
+      {/* ── Divider ── */}
+      <hr className="veil-rule" style={{ margin: "40px 0" }} />
+
+      {/* ── Position grid ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "32px",
+        }}
+      >
+        {/* FLR Collateral */}
+        <div className="data-row">
+          <p className="label">FLR Collateral</p>
+          <p className="data-val-md" style={{ marginTop: "8px" }}>
+            {fmt(position.flrCollateral)}
+          </p>
+          <p className="data-sub">FLR</p>
+          {prices && (
+            <p className="data-sub">
+              ${(Number(formatEther(position.flrCollateral)) * prices.flrUsd).toFixed(2)}
+            </p>
+          )}
         </div>
-        <div>
-          <p className="text-gray-400 text-sm">FXRP Collateral</p>
-          <p className="text-white">{fmt(position.fxrpCollateral)} FXRP</p>
-          {prices && <p className="text-gray-500 text-xs">${(Number(formatEther(position.fxrpCollateral)) * prices.xrpUsd).toFixed(2)}</p>}
+
+        {/* FXRP Collateral */}
+        <div className="data-row">
+          <p className="label">FXRP Collateral</p>
+          <p className="data-val-md" style={{ marginTop: "8px" }}>
+            {fmt(position.fxrpCollateral)}
+          </p>
+          <p className="data-sub">FXRP</p>
+          {prices && (
+            <p className="data-sub">
+              ${(Number(formatEther(position.fxrpCollateral)) * prices.xrpUsd).toFixed(2)}
+            </p>
+          )}
         </div>
-        <div>
-          <p className="text-gray-400 text-sm">FLR Debt</p>
-          <p className="text-red-400">{fmt(position.flrDebt)} FLR</p>
+
+        {/* FLR Debt */}
+        <div className="data-row">
+          <p className="label">FLR Debt</p>
+          <p
+            className="data-val-md"
+            style={{ marginTop: "8px", color: "var(--c-danger)" }}
+          >
+            {fmt(position.flrDebt)}
+          </p>
+          <p className="data-sub">FLR</p>
         </div>
-        <div>
-          <p className="text-gray-400 text-sm">FXRP Debt</p>
-          <p className="text-red-400">{fmt(position.fxrpDebt)} FXRP</p>
+
+        {/* FXRP Debt */}
+        <div className="data-row">
+          <p className="label">FXRP Debt</p>
+          <p
+            className="data-val-md"
+            style={{ marginTop: "8px", color: "var(--c-danger)" }}
+          >
+            {fmt(position.fxrpDebt)}
+          </p>
+          <p className="data-sub">FXRP</p>
         </div>
       </div>
     </div>
