@@ -1,29 +1,25 @@
 import { useState } from "react";
-import { ethers } from "ethers";
 import { useCreditScore } from "../hooks/useCreditScore";
 import { usePosition } from "../hooks/usePosition";
 import { ScoreDisplay } from "../components/ScoreDisplay";
 
-interface Props { provider: ethers.BrowserProvider; address: string; }
+interface Props {
+  xrplAddress: string;
+  personalAccount: `0x${string}` | null;
+  sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
+}
 
-export function Score({ provider, address }: Props) {
-  const { requestScore, requesting, txHash } = useCreditScore(provider);
-  const { position } = usePosition(provider, address);
-  const [error, setError] = useState<string | null>(null);
+export function Score({ xrplAddress, personalAccount, sendPayment }: Props) {
+  const { requestScore, requesting, error } = useCreditScore(sendPayment);
+  const { position } = usePosition(personalAccount);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   async function handleRequestScore() {
-    setError(null);
+    setLocalError(null);
     try {
-      // HACKATHON DEMO: plaintext token for local TEE mode
-      // Production: encrypt with TEE public key via ECIES before submission
-      const payload = JSON.stringify({
-        plaid_access_token: "access-sandbox-de3ce8ef-33f8-452c-a685-8671031fc0f6",
-        user_address: address,
-      });
-      const payloadBytes = ethers.toUtf8Bytes(payload);
-      await requestScore(payloadBytes);
-    } catch (e: any) {
-      setError(e.message || "Failed to request score");
+      await requestScore(xrplAddress);
+    } catch (e: unknown) {
+      setLocalError(e instanceof Error ? e.message : "Failed to request score");
     }
   }
 
@@ -36,10 +32,9 @@ export function Score({ provider, address }: Props) {
         <h3 className="text-lg font-bold text-white">{hasScore ? "Update Your Score" : "Get Your Credit Score"}</h3>
         <p className="text-gray-400 text-sm">Your banking data is processed privately inside a Trusted Execution Environment. Only the score is published onchain.</p>
         <button onClick={handleRequestScore} disabled={requesting} className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white py-3 px-8 rounded-lg font-bold">
-          {requesting ? "Computing in TEE..." : "Compute Credit Score"}
+          {requesting ? "Sign in Xaman..." : "Compute Credit Score"}
         </button>
-        {txHash && <p className="text-gray-500 text-xs">TX: <a href={`https://coston2-explorer.flare.network/tx/${txHash}`} target="_blank" className="text-orange-400 underline">{txHash.slice(0, 16)}...</a></p>}
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {(error || localError) && <p className="text-red-400 text-sm">{error || localError}</p>}
       </div>
     </div>
   );
