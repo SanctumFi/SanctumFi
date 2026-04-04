@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
-import { Position } from "../hooks/usePosition";
-import { Prices } from "../hooks/usePrices";
+import type { Position } from "../hooks/usePosition";
+import type { Prices } from "../hooks/usePrices";
 import { HealthBar } from "./HealthBar";
 
 interface Props { position: Position; prices: Prices | null; }
