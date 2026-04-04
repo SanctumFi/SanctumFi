@@ -2,7 +2,12 @@ import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { Navbar } from "./Navbar";
 
-export function HeroSection() {
+interface Props {
+  onConnect: () => void;
+  loading: boolean;
+}
+
+export function HeroSection({ onConnect, loading }: Props) {
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -15,7 +20,7 @@ export function HeroSection() {
 
   return (
     <section className="bg-background relative overflow-hidden min-h-screen">
-      <Navbar />
+      <Navbar onConnect={onConnect} loading={loading} />
 
       {/* Centered content with scroll blur */}
       <div
@@ -44,8 +49,13 @@ export function HeroSection() {
           className="fade-in-up mt-12 mb-[66px]"
           style={{ animationDelay: "0.3s" }}
         >
-          <Button variant="hero" className="px-[32px] py-[20px]">
-            Check Credit Score
+          <Button
+            variant="hero"
+            className="px-[32px] py-[20px]"
+            onClick={onConnect}
+            disabled={loading}
+          >
+            {loading ? "Connecting\u2026" : "Check Credit Score"}
           </Button>
         </div>
       </div>

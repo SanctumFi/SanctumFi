@@ -21,6 +21,10 @@ export const creditVaultAbi = [
   { type: "function", name: "getHealthFactor", inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" },
   { type: "function", name: "getMaxBorrow", inputs: [{ name: "user", type: "address" }, { name: "asset", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" },
   { type: "function", name: "getLtvBps", inputs: [{ name: "score", type: "uint256" }], outputs: [{ type: "uint256" }], stateMutability: "pure" },
+  { type: "function", name: "depositFLR", inputs: [], outputs: [], stateMutability: "payable" },
+  { type: "function", name: "depositFXRP", inputs: [{ name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+  { type: "function", name: "borrow", inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+  { type: "function", name: "repay", inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }], outputs: [], stateMutability: "payable" },
 ] as const satisfies Abi;
 
 export const masterAccountControllerAbi = [

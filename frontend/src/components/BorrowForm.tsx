@@ -1,19 +1,20 @@
 import { useState } from "react";
-import { strToHex } from "../lib/hex";
+import { parseEther, formatEther, zeroAddress } from "viem";
 import { publicClient } from "../lib/flareClient";
 import { CONTRACTS, creditVaultAbi } from "../config/contracts";
-import { formatEther, zeroAddress } from "viem";
+import { buildBorrowInstruction, type CustomInstruction } from "../lib/smartAccounts";
 
 interface Props {
   personalAccount: `0x${string}`;
-  sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
+  sendCustom: (instructions: CustomInstruction[], label: string) => Promise<{ txHash: string; waitForExecution: () => Promise<void> }>;
   onSuccess: () => void;
 }
 
-export function BorrowForm({ personalAccount, sendPayment, onSuccess }: Props) {
+export function BorrowForm({ personalAccount, sendCustom, onSuccess }: Props) {
   const [amount, setAmount] = useState("");
   const [maxBorrow, setMaxBorrow] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
   async function fetchMax() {
     try {
@@ -29,11 +30,25 @@ export function BorrowForm({ personalAccount, sendPayment, onSuccess }: Props) {
 
   async function handleBorrow() {
     setLoading(true);
+    setStatus("");
     try {
-      const memo = strToHex(`borrow:${amount}`);
-      await sendPayment(memo, "1000000", `FlareScore: Borrow ${amount}`);
-      setAmount(""); onSuccess();
-    } finally { setLoading(false); }
+      const amountWei = parseEther(amount);
+      const instructions = buildBorrowInstruction(zeroAddress, amountWei);
+
+      setStatus("Sign in Xaman...");
+      const { waitForExecution } = await sendCustom(instructions, `Borrow ${amount} FLR`);
+
+      setStatus("Waiting for Flare execution (~180s)...");
+      await waitForExecution();
+
+      setAmount("");
+      setStatus("Borrow confirmed!");
+      onSuccess();
+    } catch (e: any) {
+      setStatus(`Error: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -81,12 +96,18 @@ export function BorrowForm({ personalAccount, sendPayment, onSuccess }: Props) {
         </button>
       </div>
 
+      {status && (
+        <p style={{ fontSize: "11px", color: "var(--c-stone)", margin: "0 0 12px" }}>
+          {status}
+        </p>
+      )}
+
       <button
         className="btn-veil btn-veil-full"
         onClick={handleBorrow}
         disabled={loading || !amount}
       >
-        <span>{loading ? "Sign in Xaman\u2026" : "Borrow"}</span>
+        <span>{loading ? "Processing\u2026" : "Borrow"}</span>
       </button>
     </div>
   );

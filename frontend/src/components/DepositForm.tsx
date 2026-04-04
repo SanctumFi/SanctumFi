@@ -1,23 +1,35 @@
 import { useState } from "react";
-import { strToHex } from "../lib/hex";
+import { parseEther } from "viem";
+import { buildDepositInstruction, type CustomInstruction } from "../lib/smartAccounts";
 
 interface Props {
-  sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
+  sendCustom: (instructions: CustomInstruction[], label: string) => Promise<{ txHash: string; waitForExecution: () => Promise<void> }>;
   onSuccess: () => void;
 }
 
-export function DepositForm({ sendPayment, onSuccess }: Props) {
+export function DepositForm({ sendCustom, onSuccess }: Props) {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
   async function handleDeposit() {
     setLoading(true);
+    setStatus("");
     try {
-      const drops = (parseFloat(amount) * 1_000_000).toFixed(0);
-      const memo = strToHex(`deposit:${amount}`);
-      await sendPayment(memo, drops, `Veil: Deposit ${amount} XRP`);
+      const amountWei = parseEther(amount);
+      const instructions = buildDepositInstruction(amountWei);
+
+      setStatus("Sign in Xaman...");
+      const { waitForExecution } = await sendCustom(instructions, `Deposit ${amount} FLR`);
+
+      setStatus("Waiting for Flare execution (~180s)...");
+      await waitForExecution();
+
       setAmount("");
+      setStatus("Deposit confirmed!");
       onSuccess();
+    } catch (e: any) {
+      setStatus(`Error: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -46,11 +58,11 @@ export function DepositForm({ sendPayment, onSuccess }: Props) {
           margin: "0 0 36px",
         }}
       >
-        XRP sent via your XRPL wallet bridges as FXRP collateral.
+        FLR deposited as collateral via your XRPL Smart Account.
       </p>
 
       <div className="field-group">
-        <label className="field-label">Amount (XRP)</label>
+        <label className="field-label">Amount (FLR)</label>
         <input
           type="number"
           className="field-input"
@@ -60,12 +72,18 @@ export function DepositForm({ sendPayment, onSuccess }: Props) {
         />
       </div>
 
+      {status && (
+        <p style={{ fontSize: "11px", color: "var(--c-stone)", margin: "0 0 12px" }}>
+          {status}
+        </p>
+      )}
+
       <button
         className="btn-veil btn-veil-full"
         onClick={handleDeposit}
         disabled={loading || !amount}
       >
-        <span>{loading ? "Sign in Xaman\u2026" : "Deposit"}</span>
+        <span>{loading ? "Processing\u2026" : "Deposit"}</span>
       </button>
     </div>
   );

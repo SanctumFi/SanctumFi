@@ -2,13 +2,14 @@ import { usePosition } from "../hooks/usePosition";
 import { DepositForm } from "../components/DepositForm";
 import { BorrowForm } from "../components/BorrowForm";
 import { RepayForm } from "../components/RepayForm";
+import { type CustomInstruction } from "../lib/smartAccounts";
 
 interface Props {
   personalAccount: `0x${string}` | null;
-  sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
+  sendCustom: (instructions: CustomInstruction[], label: string) => Promise<{ txHash: string; waitForExecution: () => Promise<void> }>;
 }
 
-export function Lend({ personalAccount, sendPayment }: Props) {
+export function Lend({ personalAccount, sendCustom }: Props) {
   const { position, refresh } = usePosition(personalAccount);
   const hasScore = position && position.creditScore > 0n;
 
@@ -34,13 +35,13 @@ export function Lend({ personalAccount, sendPayment }: Props) {
         border: "1px solid var(--c-mist)",
       }}
     >
-      <DepositForm sendPayment={sendPayment} onSuccess={refresh} />
+      <DepositForm sendCustom={sendCustom} onSuccess={refresh} />
       <BorrowForm
         personalAccount={personalAccount!}
-        sendPayment={sendPayment}
+        sendCustom={sendCustom}
         onSuccess={refresh}
       />
-      <RepayForm sendPayment={sendPayment} onSuccess={refresh} />
+      <RepayForm sendCustom={sendCustom} onSuccess={refresh} />
     </div>
   );
 }

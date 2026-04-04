@@ -2,7 +2,12 @@ import { Button } from "../ui/button";
 
 const NAV_ITEMS = ["Markets", "Borrow", "Earn", "Institutions"];
 
-export function Navbar() {
+interface Props {
+  onConnect: () => void;
+  loading: boolean;
+}
+
+export function Navbar({ onConnect, loading }: Props) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 py-5 px-8">
       <div className="flex flex-row items-center justify-between">
@@ -25,8 +30,14 @@ export function Navbar() {
         </div>
 
         {/* CTA */}
-        <Button variant="heroSecondary" size="sm" className="px-6 py-2">
-          Launch App
+        <Button
+          variant="heroSecondary"
+          size="sm"
+          className="px-6 py-2"
+          onClick={onConnect}
+          disabled={loading}
+        >
+          {loading ? "Connecting\u2026" : "Launch App"}
         </Button>
       </div>
 

@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@flarenetwork/flare-wagmi-periphery-package": "^2.7.0",
     "@fontsource/cormorant-garamond": "^5.2.11",
     "@fontsource/instrument-sans": "^5.2.8",
     "react": "^19.2.4",

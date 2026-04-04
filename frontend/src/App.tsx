@@ -6,6 +6,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Score } from "./pages/Score";
 import { Lend } from "./pages/Lend";
 import { LandingPage } from "./components/landing/LandingPage";
+import { type CustomInstruction } from "./lib/smartAccounts";
 
 type Tab = "dashboard" | "score" | "lend";
 
@@ -38,6 +39,7 @@ interface AppShellProps {
   xrplAddress: string;
   personalAccount: `0x${string}` | null;
   sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
+  sendCustom: (instructions: CustomInstruction[], label: string) => Promise<{ txHash: string; waitForExecution: () => Promise<void> }>;
   onDisconnect: () => void;
 }
 
@@ -53,6 +55,7 @@ function AppShell({
   xrplAddress,
   personalAccount,
   sendPayment,
+  sendCustom,
   onDisconnect,
 }: AppShellProps) {
   return (
@@ -103,7 +106,7 @@ function AppShell({
           />
         )}
         {tab === "lend" && (
-          <Lend personalAccount={personalAccount} sendPayment={sendPayment} />
+          <Lend personalAccount={personalAccount} sendCustom={sendCustom} />
         )}
       </main>
     </div>
@@ -112,8 +115,8 @@ function AppShell({
 
 /* ── Root ── */
 export default function App() {
-  const { xumm, xrplAddress, connected, disconnect } = useXaman();
-  const { personalAccount, sendPayment } = useSmartAccount(xumm, xrplAddress);
+  const { xumm, xrplAddress, connected, loading, connect, disconnect } = useXaman();
+  const { personalAccount, sendPayment, sendCustom } = useSmartAccount(xumm, xrplAddress);
   const [tab, setTab] = useState<Tab>("dashboard");
 
   return (
@@ -126,10 +129,11 @@ export default function App() {
           xrplAddress={xrplAddress}
           personalAccount={personalAccount}
           sendPayment={sendPayment}
+          sendCustom={sendCustom}
           onDisconnect={disconnect}
         />
       ) : (
-        <LandingPage />
+        <LandingPage onConnect={connect} loading={loading} />
       )}
     </>
   );
