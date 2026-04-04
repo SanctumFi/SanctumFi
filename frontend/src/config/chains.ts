@@ -10,3 +10,8 @@ export const coston2 = {
     decimals: 18,
   },
 };
+
+export const xrplTestnet = {
+  wssUrl: "wss://s.altnet.rippletest.net:51233",
+  name: "XRPL Testnet",
+};
