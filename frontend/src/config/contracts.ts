@@ -1,38 +1,41 @@
+import { type Abi } from "viem";
+
 export const CONTRACTS = {
-  creditVault: import.meta.env.VITE_CREDIT_VAULT_ADDRESS || "",
-  instructionSender: import.meta.env.VITE_INSTRUCTION_SENDER_ADDRESS || "",
-  smartAccountReceiver: import.meta.env.VITE_SMART_ACCOUNT_RECEIVER_ADDRESS || "",
-  ftsoV2: "0x3d893C53D9e8056135C26C8c638B76C8b60Df726",
-  fxrp: import.meta.env.VITE_FXRP_ADDRESS || "",
+  creditVault: (import.meta.env.VITE_CREDIT_VAULT_ADDRESS || "0x") as `0x${string}`,
+  smartAccountReceiver: (import.meta.env.VITE_SMART_ACCOUNT_RECEIVER_ADDRESS || "0x") as `0x${string}`,
+  masterAccountController: "0x434936d47503353f06750Db1A444DBDC5F0AD37c" as `0x${string}`,
+  ftsoV2: "0x3d893C53D9e8056135C26C8c638B76C8b60Df726" as `0x${string}`,
+  fxrp: (import.meta.env.VITE_FXRP_ADDRESS || "0x") as `0x${string}`,
 };
 
-export const CREDIT_VAULT_ABI = [
-  "function positions(address) view returns (uint256 creditScore, uint256 scoreTimestamp, uint256 flrCollateral, uint256 fxrpCollateral, uint256 flrDebt, uint256 fxrpDebt, uint256 flrBorrowTimestamp, uint256 fxrpBorrowTimestamp)",
-  "function depositFLR() payable",
-  "function depositFXRP(uint256 amount)",
-  "function borrow(address asset, uint256 amount)",
-  "function repay(address asset, uint256 amount) payable",
-  "function withdrawCollateral(address asset, uint256 amount)",
-  "function liquidate(address user)",
-  "function getDebt(address user) view returns (uint256 flrDebt, uint256 fxrpDebt)",
-  "function getHealthFactor(address user) view returns (uint256)",
-  "function getMaxBorrow(address user, address asset) view returns (uint256)",
-  "function getLtvBps(uint256 score) pure returns (uint256)",
-  "event ScoreReceived(address indexed user, uint256 score, uint256 timestamp)",
-  "event CollateralDeposited(address indexed user, address asset, uint256 amount)",
-  "event Borrowed(address indexed user, address asset, uint256 amount)",
-  "event Repaid(address indexed user, address asset, uint256 amount)",
-  "event Liquidated(address indexed user, address liquidator, uint256 collateralSeized)",
-];
+export const creditVaultAbi = [
+  { type: "function", name: "positions", inputs: [{ name: "user", type: "address" }], outputs: [
+    { name: "creditScore", type: "uint256" }, { name: "scoreTimestamp", type: "uint256" },
+    { name: "flrCollateral", type: "uint256" }, { name: "fxrpCollateral", type: "uint256" },
+    { name: "flrDebt", type: "uint256" }, { name: "fxrpDebt", type: "uint256" },
+    { name: "flrBorrowTimestamp", type: "uint256" }, { name: "fxrpBorrowTimestamp", type: "uint256" },
+  ], stateMutability: "view" },
+  { type: "function", name: "getDebt", inputs: [{ name: "user", type: "address" }], outputs: [
+    { name: "flrDebt", type: "uint256" }, { name: "fxrpDebt", type: "uint256" },
+  ], stateMutability: "view" },
+  { type: "function", name: "getHealthFactor", inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "nonpayable" },
+  { type: "function", name: "getMaxBorrow", inputs: [{ name: "user", type: "address" }, { name: "asset", type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "nonpayable" },
+  { type: "function", name: "getLtvBps", inputs: [{ name: "score", type: "uint256" }], outputs: [{ type: "uint256" }], stateMutability: "pure" },
+] as const satisfies Abi;
 
-export const INSTRUCTION_SENDER_ABI = [
-  "function requestCreditScore(bytes encryptedPlaidPayload) payable",
-];
+export const masterAccountControllerAbi = [
+  { type: "function", name: "getPersonalAccount", inputs: [{ name: "xrplAddress", type: "string" }], outputs: [{ type: "address" }], stateMutability: "view" },
+  { type: "function", name: "getXrplProviderWallets", inputs: [], outputs: [{ type: "string[]" }], stateMutability: "view" },
+] as const satisfies Abi;
 
-export const FTSOV2_ABI = [
-  "function getFeedById(bytes21 _feedId) payable returns (uint256 _value, int8 _decimals, uint64 _timestamp)",
-  "function getFeedsById(bytes21[] _feedIds) payable returns (uint256[] _values, int8[] _decimals, uint64 _timestamp)",
-];
+export const ftsoV2Abi = [
+  { type: "function", name: "getFeedById", inputs: [{ name: "_feedId", type: "bytes21" }], outputs: [
+    { type: "uint256" }, { type: "int8" }, { type: "uint64" },
+  ], stateMutability: "payable" },
+  { type: "function", name: "getFeedsById", inputs: [{ name: "_feedIds", type: "bytes21[]" }], outputs: [
+    { type: "uint256[]" }, { type: "int8[]" }, { type: "uint64" },
+  ], stateMutability: "payable" },
+] as const satisfies Abi;
 
-export const FLR_USD_FEED_ID = "0x01464c522f55534400000000000000000000000000";
-export const XRP_USD_FEED_ID = "0x015852502f55534400000000000000000000000000";
+export const FLR_USD_FEED_ID = "0x01464c522f55534400000000000000000000000000" as `0x${string}`;
+export const XRP_USD_FEED_ID = "0x015852502f55534400000000000000000000000000" as `0x${string}`;
