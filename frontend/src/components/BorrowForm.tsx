@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { strToHex } from "../lib/hex";
 import { publicClient } from "../lib/flareClient";
 import { CONTRACTS, creditVaultAbi } from "../config/contracts";
 import { formatEther, zeroAddress } from "viem";
@@ -29,7 +30,7 @@ export function BorrowForm({ personalAccount, sendPayment, onSuccess }: Props) {
   async function handleBorrow() {
     setLoading(true);
     try {
-      const memo = Buffer.from(`borrow:${amount}`).toString("hex");
+      const memo = strToHex(`borrow:${amount}`);
       await sendPayment(memo, "1000000", `FlareScore: Borrow ${amount}`);
       setAmount(""); onSuccess();
     } finally { setLoading(false); }

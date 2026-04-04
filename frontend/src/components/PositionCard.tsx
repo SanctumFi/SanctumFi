@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { formatEther } from "viem";
 import type { Position } from "../hooks/usePosition";
 import type { Prices } from "../hooks/usePrices";
 import { HealthBar } from "./HealthBar";
@@ -15,7 +15,7 @@ function tierLtv(score: bigint): string {
 }
 
 export function PositionCard({ position, prices }: Props) {
-  const fmt = (v: bigint) => Number(ethers.formatEther(v)).toFixed(4);
+  const fmt = (v: bigint) => Number(formatEther(v)).toFixed(4);
 
   return (
     <div className="bg-gray-900 rounded-xl p-6 space-y-4">
@@ -33,12 +33,12 @@ export function PositionCard({ position, prices }: Props) {
         <div>
           <p className="text-gray-400 text-sm">FLR Collateral</p>
           <p className="text-white">{fmt(position.flrCollateral)} FLR</p>
-          {prices && <p className="text-gray-500 text-xs">${(Number(ethers.formatEther(position.flrCollateral)) * prices.flrUsd).toFixed(2)}</p>}
+          {prices && <p className="text-gray-500 text-xs">${(Number(formatEther(position.flrCollateral)) * prices.flrUsd).toFixed(2)}</p>}
         </div>
         <div>
           <p className="text-gray-400 text-sm">FXRP Collateral</p>
           <p className="text-white">{fmt(position.fxrpCollateral)} FXRP</p>
-          {prices && <p className="text-gray-500 text-xs">${(Number(ethers.formatEther(position.fxrpCollateral)) * prices.xrpUsd).toFixed(2)}</p>}
+          {prices && <p className="text-gray-500 text-xs">${(Number(formatEther(position.fxrpCollateral)) * prices.xrpUsd).toFixed(2)}</p>}
         </div>
         <div>
           <p className="text-gray-400 text-sm">FLR Debt</p>

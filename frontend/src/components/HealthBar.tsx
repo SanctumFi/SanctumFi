@@ -1,11 +1,11 @@
-import { ethers } from "ethers";
+import { formatEther } from "viem";
 
 interface Props { value: bigint; }
 
 export function HealthBar({ value }: Props) {
-  const hf = Number(ethers.formatEther(value));
+  const hf = Number(formatEther(value));
   const isMax = hf > 100;
-  const display = isMax ? "∞" : hf.toFixed(2);
+  const display = isMax ? "\u221e" : hf.toFixed(2);
   let color = "bg-green-500";
   if (hf < 1.0) color = "bg-red-500";
   else if (hf < 1.5) color = "bg-yellow-500";

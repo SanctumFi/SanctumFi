@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { strToHex } from "../lib/hex";
 
 interface Props {
   sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
@@ -13,7 +14,7 @@ export function RepayForm({ sendPayment, onSuccess }: Props) {
     setLoading(true);
     try {
       const drops = (parseFloat(amount) * 1_000_000).toFixed(0);
-      const memo = Buffer.from(`repay:${amount}`).toString("hex");
+      const memo = strToHex(`repay:${amount}`);
       await sendPayment(memo, drops, `FlareScore: Repay ${amount}`);
       setAmount(""); onSuccess();
     } finally { setLoading(false); }

@@ -14,7 +14,7 @@
     "react-dom": "^19.2.4",
     "react-plaid-link": "^4.1.1",
     "viem": "^2.47.10",
-    "xumm": "^1.0.0"
+    "xumm": "^1.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

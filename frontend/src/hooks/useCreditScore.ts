@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { strToHex } from "../lib/hex";
 
 type SendPaymentFn = (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
 
@@ -18,7 +19,7 @@ export function useCreditScore(sendPayment: SendPaymentFn | null) {
         plaid_access_token: "access-sandbox-de3ce8ef-33f8-452c-a685-8671031fc0f6",
         user_address: xrplAddress,
       });
-      const memoHex = Buffer.from(payload, "utf-8").toString("hex");
+      const memoHex = strToHex(payload);
       const result = await sendPayment(memoHex, "1000000", "FlareScore: Compute Credit Score");
       setTxResult(result);
     } catch (e: unknown) {

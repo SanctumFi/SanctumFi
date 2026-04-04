@@ -21,7 +21,7 @@ export function useXaman() {
     const xumm = getXumm();
     xumm.environment.ready.then(() => {
       if (xumm.runtime?.xapp) {
-        xumm.environment.ott?.then((ott) => {
+        xumm.environment.ott?.then((ott: { account?: string } | undefined) => {
           if (ott?.account) {
             setXrplAddress(ott.account);
             setConnected(true);

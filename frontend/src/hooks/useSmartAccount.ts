@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Xumm } from "xumm";
+import { type Xumm } from "xumm";
 import { publicClient } from "../lib/flareClient";
 import { CONTRACTS, masterAccountControllerAbi } from "../config/contracts";
 

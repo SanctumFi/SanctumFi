@@ -35,7 +35,7 @@ export function usePosition(personalAccount: `0x${string}` | null) {
         abi: creditVaultAbi,
         functionName: "getDebt",
         args: [personalAccount],
-      }) as [bigint, bigint];
+      });
 
       let healthFactor = MAX_UINT;
       try {
@@ -44,7 +44,7 @@ export function usePosition(personalAccount: `0x${string}` | null) {
           abi: creditVaultAbi,
           functionName: "getHealthFactor",
           args: [personalAccount],
-        }) as bigint;
+        });
       } catch { /* no debt = max health */ }
 
       setPosition({
@@ -52,8 +52,8 @@ export function usePosition(personalAccount: `0x${string}` | null) {
         scoreTimestamp: pos[1],
         flrCollateral: pos[2],
         fxrpCollateral: pos[3],
-        flrDebt: debtResult[0],
-        fxrpDebt: debtResult[1],
+        flrDebt: (debtResult as [bigint, bigint])[0],
+        fxrpDebt: (debtResult as [bigint, bigint])[1],
         healthFactor,
       });
     } catch (e) {
