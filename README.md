@@ -402,99 +402,373 @@ Veil/
 │   │       └── chains.ts              # Coston2 network config
 │   └── package.json
 │
-└── tee/typescript/                     # TEE credit scoring extension
-    ├── src/
-    │   ├── main.ts                     # HTTP server entry point (port 8080)
-    │   ├── app/
-    │   │   ├── handlers.ts             # Score computation handler
-    │   │   ├── scoring.ts              # 4-factor algorithm (0–1000)
-    │   │   ├── plaid.ts                # Plaid API + sandbox fallback
-    │   │   └── config.ts              # Constants (CREDIT/SCORE op codes)
-    │   └── __tests__/
-    │       ├── scoring.test.ts         # Algorithm edge cases
-    │       ├── plaid-sandbox.test.ts   # Fallback scenarios
-    │       └── integration.test.ts     # E2E encryption test
-    ├── docker-compose.yml
-    └── Dockerfile
+└── tee/                                # TEE extension stack
+    ├── docker-compose.yaml             # 3-container stack (redis + proxy + extension)
+    ├── .env.example                    # All required env vars
+    ├── config/
+    │   ├── coston2/deployed-addresses.json  # Flare system contract addresses
+    │   └── proxy/extension_proxy.toml       # Proxy DB config
+    ├── scripts/
+    │   ├── full-setup.sh               # Interactive guided setup (all steps)
+    │   ├── deploy-contracts.sh         # Step 1: Deploy to Coston2
+    │   ├── register-extension.sh       # Step 2: Register on TeeExtensionRegistry
+    │   ├── start-stack.sh              # Step 3: Docker compose build + up
+    │   └── register-tee-version.sh     # Step 5-6: Register version + machine
+    ├── go/tools/                       # Go CLI tools for TEE registration
+    ├── proxy/Dockerfile                # ext-proxy (chain monitor)
+    └── typescript/                     # TEE extension handler
+        ├── Dockerfile
+        ├── package.json
+        └── src/
+            ├── main.ts                 # HTTP server entry point
+            ├── app/
+            │   ├── handlers.ts         # Score computation handler
+            │   ├── scoring.ts          # 4-factor algorithm (0–1000)
+            │   ├── plaid.ts            # Plaid API + sandbox fallback
+            │   └── config.ts           # Constants (CREDIT/SCORE op codes)
+            └── __tests__/
+                ├── scoring.test.ts
+                ├── plaid-sandbox.test.ts
+                └── integration.test.ts
 ```
 
 ---
 
-## Getting Started
+## Local Deployment — Full Step-by-Step Guide
+
+This walks you through deploying everything locally: contracts, TEE extension (Docker), tunnel, and frontend — all connected to the Coston2 testnet.
 
 ### Prerequisites
 
-- [Foundry](https://getfoundry.sh/) — smart contract toolchain
-- Node.js 18+ and npm
-- Docker and Docker Compose
-- MetaMask browser extension
-- Plaid sandbox credentials (free at [plaid.com/docs/sandbox](https://plaid.com/docs/sandbox/))
-- Coston2 testnet FLR (from [Flare Faucet](https://faucet.flare.network/coston2))
+| Tool | Install |
+|------|---------|
+| **Foundry** (forge, cast) | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
+| **Node.js >= 18** | https://nodejs.org |
+| **Docker + Docker Compose** | https://docs.docker.com/get-docker/ |
+| **Go >= 1.23** | https://go.dev (for TEE registration tools) |
+| **cloudflared** | https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/ |
+| **MetaMask** | Browser extension, configured for Coston2 |
 
-### 1. Smart Contracts
+**You also need:**
+- A funded Coston2 wallet (get C2FLR from [Flare Faucet](https://faucet.flare.network/coston2))
+- Plaid Sandbox credentials (free at [plaid.com/docs/sandbox](https://plaid.com/docs/sandbox/))
+- C-chain indexer DB credentials (provided by Flare for hackathon participants)
+
+---
+
+### Step 0: Configure Environment Files
+
+You need three `.env` files. Start from the examples:
+
+```bash
+cp tee/.env.example tee/.env
+cp contracts/.env.example contracts/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+#### `tee/.env`
+
+```env
+LANGUAGE=typescript
+PRIVATE_KEY=<your-funded-coston2-private-key-WITHOUT-0x-prefix>
+INITIAL_OWNER=<address-derived-from-your-private-key>
+PLAID_CLIENT_ID=<plaid-sandbox-client-id>
+PLAID_SECRET=<plaid-sandbox-secret>
+FEE_WEI=1000000000000
+
+# Filled in later during setup:
+INSTRUCTION_SENDER=
+EXTENSION_ID=
+TUNNEL_URL=
+
+# Coston2 system contracts (DO NOT CHANGE)
+CHAIN_URL=https://coston2-api.flare.network/ext/C/rpc
+TEE_EXTENSION_REGISTRY=0x3d478d43426081BD5854be9C7c5c183bfe76C981
+TEE_MACHINE_REGISTRY=0x5918Cd58e5caf755b8584649Aa24077822F87613
+TEE_VERSION_MANAGER=0x2da0D3bcAB211f59e3f1115B071d088D88C8f8fc
+FTSOV2_ADDRESS=0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d
+NORMAL_PROXY_URL=https://tee-proxy-coston2-1.flare.rocks
+FXRP_ADDRESS=0x0000000000000000000000000000000000000000
+LOCAL_MODE=false
+```
+
+#### `contracts/.env`
+
+```env
+PRIVATE_KEY=0x<same-key-WITH-0x-prefix>
+COSTON2_RPC_URL=https://coston2-api.flare.network/ext/C/rpc
+FTSOV2_ADDRESS=0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d
+FXRP_ADDRESS=0x0000000000000000000000000000000000000000
+TEE_EXTENSION_REGISTRY=0x3d478d43426081BD5854be9C7c5c183bfe76C981
+TEE_MACHINE_REGISTRY=0x5918Cd58e5caf755b8584649Aa24077822F87613
+```
+
+#### Proxy config
+
+```bash
+cp tee/config/proxy/extension_proxy.toml.example tee/config/proxy/extension_proxy.toml
+```
+
+Edit the `[db]` section with C-chain indexer credentials (provided by Flare for hackathon participants).
+
+---
+
+### Step 1: Deploy Smart Contracts
 
 ```bash
 cd contracts
-cp .env.example .env
-# Edit .env with your deployer key and Coston2 addresses
-
 forge install
 forge build
-forge test
 ```
 
-### 2. Frontend
+Deploy all three contracts to Coston2 in one step:
+
+```bash
+forge script script/Deploy.s.sol \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --broadcast \
+  --verify \
+  -vvv
+```
+
+This deploys:
+1. `InstructionSender` — TEE score request router
+2. `CreditVault` — lending core (linked to FTSO V2 + TEE signer)
+3. `SmartAccountReceiver` — XRPL bridge
+4. Authorizes `SmartAccountReceiver` on the vault
+5. Seeds the vault with 10 FLR initial liquidity
+
+**Save the deployed addresses** from the output — you need them for every following step.
+
+#### Verify deployment
+
+```bash
+RPC=https://coston2-api.flare.network/ext/C/rpc
+
+cast call <CREDIT_VAULT> "owner()" --rpc-url $RPC
+cast call <CREDIT_VAULT> "smartAccountReceiver()" --rpc-url $RPC
+cast balance <CREDIT_VAULT> --rpc-url $RPC --ether   # Should show 10
+```
+
+---
+
+### Step 2: Register TEE Extension
+
+Update `tee/.env` with the `INSTRUCTION_SENDER` address from Step 1, then:
+
+```bash
+cd tee/go/tools
+go run ./cmd/register-extension
+```
+
+This registers your `InstructionSender` on the `TeeExtensionRegistry` and prints an extension ID (e.g. `271`).
+
+Save it in `tee/.env` as a 32-byte hex:
+```env
+EXTENSION_ID=0x000000000000000000000000000000000000000000000000000000000000010f
+```
+
+Then link the extension ID to the contract:
+
+```bash
+cast send <INSTRUCTION_SENDER> "setExtensionId()" \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --private-key $PRIVATE_KEY
+```
+
+Verify:
+```bash
+cast call <INSTRUCTION_SENDER> "getExtensionId()" \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc
+# Should return your extension ID
+```
+
+---
+
+### Step 3: Build and Start Docker Stack
+
+```bash
+cd tee
+docker compose build
+docker compose up -d
+```
+
+This starts 3 containers:
+
+| Container | Purpose | Host Port |
+|-----------|---------|-----------|
+| `redis` | Proxy state store | 6383 |
+| `ext-proxy` | Watches chain for instructions, routes to TEE | 6675 (internal), 6676 (external) |
+| `extension-tee` | TypeScript handler: decrypt → Plaid → score → sign | (internal only) |
+
+Wait for everything to be healthy:
+
+```bash
+# Wait for proxy to be ready
+until curl -sf http://localhost:6676/info >/dev/null 2>&1; do sleep 2; done
+echo "Proxy is ready"
+
+# Verify all 3 containers are running
+docker ps --filter "name=tee" --format "table {{.Names}}\t{{.Status}}"
+```
+
+---
+
+### Step 4: Start Tunnel
+
+The Flare infrastructure needs to reach your TEE proxy over the internet. In a **separate terminal** (keep it running):
+
+```bash
+cloudflared tunnel --url http://localhost:6676
+```
+
+Copy the HTTPS URL (e.g. `https://some-random-words.trycloudflare.com`) and update `tee/.env`:
+
+```env
+TUNNEL_URL=https://some-random-words.trycloudflare.com
+```
+
+Verify:
+```bash
+curl -s https://some-random-words.trycloudflare.com/info | head -c 100
+# Should return JSON with TEE node info
+```
+
+> **Important:** If the tunnel restarts with a new URL, you must update `TUNNEL_URL`, restart Docker, and redo Steps 5–6.
+
+---
+
+### Step 5: Register TEE Version
+
+```bash
+cd tee/go/tools
+go run ./cmd/allow-tee-version -p http://localhost:6676
+```
+
+This registers the code hash and platform with the `TeeVersionManager` contract.
+
+---
+
+### Step 6: Register TEE Machine
+
+```bash
+cd tee/go/tools
+go run ./cmd/register-tee -p http://localhost:6676 -l
+```
+
+The `-l` flag enables **local/test mode** (required for Coston2 — uses fake attestation instead of real hardware attestation).
+
+This runs a multi-step process:
+1. **Pre-registration** — announces the TEE machine on-chain
+2. **Attestation** — requests TEE attestation (test mode on Coston2)
+3. **Availability check** — Flare's public proxy verifies your TEE is reachable via the tunnel
+4. **Activation** — marks TEE as production-ready
+
+Expected output:
+```
+INFO  Registration of TEE with ID <TEE_ADDRESS>
+INFO  (pre)registration of TEE ... succeeded
+INFO  availability check sent, instructionId: ...
+INFO  availability check proof obtained
+INFO  Registered TEE node with id 0x<TEE_ADDRESS>
+```
+
+**Save the `TEE_ADDRESS`** from the output.
+
+> **Troubleshooting:** If the availability check times out (404 after 60 retries), restart Docker (`docker compose down && docker compose up -d`), wait for proxy health, then retry Steps 5 + 6.
+
+---
+
+### Step 7: Set TEE Node as Trusted Signer
+
+The `CreditVault` needs to know which TEE address is allowed to submit credit scores:
+
+```bash
+cast send <CREDIT_VAULT> "setTeeSigner(address)" <TEE_ADDRESS> \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --private-key $PRIVATE_KEY
+```
+
+Verify:
+```bash
+cast call <CREDIT_VAULT> "teeSigner()" \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc
+# Should return the TEE address
+```
+
+---
+
+### Step 8: Start Frontend
+
+Update `frontend/.env.local` with the deployed addresses:
+
+```env
+VITE_CREDIT_VAULT_ADDRESS=<CREDIT_VAULT from Step 1>
+VITE_INSTRUCTION_SENDER_ADDRESS=<INSTRUCTION_SENDER from Step 1>
+VITE_SMART_ACCOUNT_RECEIVER_ADDRESS=<SMART_ACCOUNT_RECEIVER from Step 1>
+VITE_FXRP_ADDRESS=0x0000000000000000000000000000000000000000
+VITE_XAMAN_API_KEY=<your-xaman-api-key>
+```
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local
-# Set VITE_CREDIT_VAULT_ADDRESS, VITE_INSTRUCTION_SENDER_ADDRESS, etc.
-
-npm run dev         # Dev server at http://localhost:5173
+npm run dev
 ```
 
-### 3. TEE Extension
-
-```bash
-cd tee/typescript
-npm install
-cp .env.example .env
-# Set PLAID_CLIENT_ID, PLAID_SECRET, PRIVATE_KEY
-
-# Run with Docker
-LANGUAGE=typescript docker compose up -d
-
-# Expose proxy via tunnel (for TEE attestation)
-cloudflared tunnel --url http://localhost:6676
-```
+Open http://localhost:5173 — connect MetaMask (Coston2 network), and you're ready to go.
 
 ---
 
-## Deployment
+### Automated Setup (Alternative)
 
-### Deploy Contracts (one command)
+If you prefer a guided interactive flow, there's a script that runs all steps in order:
 
 ```bash
-cd contracts
-forge script script/Deploy.s.sol \
-  --rpc-url $COSTON2_RPC_URL \
-  --broadcast \
-  --verify \
-  -vvvv
+cd tee
+./scripts/full-setup.sh
 ```
 
-The script deploys all three contracts, authorizes `SmartAccountReceiver` on the vault, and seeds 10 FLR of initial liquidity.
+It pauses between steps so you can copy addresses and update `.env`.
 
-### Register TEE Extension
+---
 
-After deploying the Docker stack and exposing the tunnel:
+### Verification Checklist
 
-1. Register the extension with `TeeExtensionRegistry` to get an extension ID
-2. Register the TEE version with `TeeVersionManager`
-3. Register the TEE machine (pre-register → attest → activate)
+After setup, run these to confirm everything is wired correctly:
 
-See `TEE-SETUP-GUIDE.md` for detailed registration steps.
+```bash
+RPC=https://coston2-api.flare.network/ext/C/rpc
+
+# Contracts deployed and configured
+cast call <CREDIT_VAULT> "owner()" --rpc-url $RPC
+cast call <CREDIT_VAULT> "teeSigner()" --rpc-url $RPC
+cast call <CREDIT_VAULT> "smartAccountReceiver()" --rpc-url $RPC
+cast balance <CREDIT_VAULT> --rpc-url $RPC --ether
+
+# InstructionSender linked to extension
+cast call <INSTRUCTION_SENDER> "getExtensionId()" --rpc-url $RPC
+
+# SmartAccountReceiver wired to vault
+cast call <SMART_ACCOUNT_RECEIVER> "vault()" --rpc-url $RPC
+
+# Docker healthy
+docker ps --filter "name=tee" --format "table {{.Names}}\t{{.Status}}"
+
+# Proxy reachable locally and via tunnel
+curl -sf http://localhost:6675/state
+curl -sf <TUNNEL_URL>/info
+```
+
+### Port Reference
+
+| Service | Container Port | Host Port | Notes |
+|---------|---------------|-----------|-------|
+| ext-proxy internal | 6663 | 6675 | Used by extension-tee and local debugging |
+| ext-proxy external | 6664 | 6676 | Exposed via tunnel for Flare infrastructure |
+| redis | 6379 | 6383 | Proxy state store |
+| TEE sign server | 8882 | (internal) | Only accessible within Docker network |
+| TEE extension | 8883 | (internal) | Only accessible within Docker network |
 
 ---
 
@@ -524,8 +798,28 @@ Test coverage:
 
 ```bash
 cd tee/typescript
+npm install
 npm test                # Scoring algorithm + Plaid fallback tests
 ```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build           # Type-check + production build
+npm run lint            # ESLint
+```
+
+### End-to-End Test
+
+Once everything is deployed and running:
+
+1. Open http://localhost:5173
+2. Connect MetaMask (Coston2 network)
+3. Go to **Score** tab → Connect bank (Plaid Sandbox) → Request credit score
+4. Wait ~30s for TEE to process and return the score
+5. Go to **Lend** tab → Deposit FLR → Borrow against your score-adjusted LTV
+6. Check **Dashboard** → Verify position, health factor, and balances
 
 ---
 
