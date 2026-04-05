@@ -37,7 +37,7 @@ func main() {
 		Params: ecies.ECIES_AES128_SHA256,
 	}
 
-	payload := `{"plaid_access_token":"access-sandbox-de3ce8ef-33f8-452c-a685-8671031fc0f6","user_address":"0x1A5C418505e2Cd6426BaD9Fd0EE453B031A14e83"}`
+	payload := `{"plaid_access_token":"access-sandbox-b300f541-c41c-4eda-9c63-af7015e0f10d","user_address":"0x1A5C418505e2Cd6426BaD9Fd0EE453B031A14e83"}`
 
 	ct, err := ecies.Encrypt(rand.Reader, eciesPub, []byte(payload), nil, nil)
 	if err != nil {

@@ -34,7 +34,7 @@ contract InstructionSender {
         return _extensionId;
     }
 
-    function requestCreditScore(bytes calldata _encryptedPayload) external payable {
+    function requestCreditScore(bytes calldata _encryptedPayload) external payable returns (bytes32) {
         require(_extensionId != 0, "extension ID not set");
 
         address[] memory teeIds = teeMachineRegistry.getRandomTeeIds(_extensionId, 1);
@@ -45,6 +45,6 @@ contract InstructionSender {
         params.message = _encryptedPayload;
         params.claimBackAddress = msg.sender;
 
-        teeExtensionRegistry.sendInstructions{value: msg.value}(teeIds, params);
+        return teeExtensionRegistry.sendInstructions{value: msg.value}(teeIds, params);
     }
 }

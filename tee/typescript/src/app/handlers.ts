@@ -84,28 +84,23 @@ async function handleCreditScore(
 
   // 5. Compute credit score
   const scoreResult = computeCreditScore(plaidData);
-  const timestamp = Math.floor(Date.now() / 1000);
+  // Subtract 5s buffer so timestamp is never ahead of block.timestamp
+  const timestamp = Math.floor(Date.now() / 1000) - 5;
 
   // 6. Sign the score with the TEE node's private key.
   //    CreditVault verifies: keccak256(abi.encodePacked(user, score, timestamp))
   //    wrapped with "\x19Ethereum Signed Message:\n32" prefix.
   let signature: string;
   try {
-    const messageHash = keccak256(
-      encodePacked(
-        ["address", "uint256", "uint256"],
-        [payload.user_address as `0x${string}`, BigInt(scoreResult.total), BigInt(timestamp)]
-      )
+    // CreditVault: keccak256(encodePacked(user,score,ts)) -> toEthSignedMessageHash -> recover
+    // TEE /sign: keccak256(input) -> accounts.TextHash (EIP-191) -> ECDSA sign
+    // Send raw encodePacked bytes so /sign produces the matching digest.
+    const packed = encodePacked(
+      ["address", "uint256", "uint256"],
+      [payload.user_address as `0x${string}`, BigInt(scoreResult.total), BigInt(timestamp)]
     );
-    // Apply EIP-191 prefix: "\x19Ethereum Signed Message:\n32" + hash
-    const prefix = Buffer.from("\x19Ethereum Signed Message:\n32");
-    const hashBytes = hexToBytes(messageHash);
-    const ethSignedHash = new Uint8Array(prefix.length + hashBytes.length);
-    ethSignedHash.set(prefix);
-    ethSignedHash.set(hashBytes, prefix.length);
-    const toSign = keccak256(ethSignedHash);
 
-    signature = await signViaNode(hexToBytes(toSign));
+    signature = await signViaNode(hexToBytes(packed));
   } catch (e) {
     return [null, 0, `TEE signing failed: ${e}`];
   }
@@ -177,6 +172,10 @@ function signViaNode(message: Uint8Array): Promise<string> {
           try {
             const parsed = JSON.parse(data);
             const sigBytes = Buffer.from(parsed.signature, "base64");
+            // Go crypto.Sign returns v as 0/1, Solidity ecrecover needs 27/28
+            if (sigBytes.length === 65 && sigBytes[64] < 27) {
+              sigBytes[64] += 27;
+            }
             resolve("0x" + sigBytes.toString("hex"));
           } catch (e) {
             reject(new Error(`decode sign response: ${e}`));

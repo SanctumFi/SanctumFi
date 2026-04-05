@@ -24,7 +24,7 @@ const INTERNAL_PROXY = "http://localhost:6675";
 
 const PRIVATE_KEY = "0x819a4345c69fc281b18df8e7141d8fa81c7151a4e3a60373609333329fe19817";
 const CREDIT_VAULT = "0x4b9143eb678D529A604923B38cDd17c4DfD5e1b0";
-const INSTRUCTION_SENDER = "0xA9F3bFd8233314E6198027BD9487904C2af33003";
+const INSTRUCTION_SENDER = "0xF45ed61c78154b84A5Ca8A3A67a89eb418B6929E";
 
 // Plaid Sandbox test token — use the one from Plaid's sandbox quickstart
 // This is a public sandbox token, not a real credential.
@@ -42,7 +42,7 @@ const walletClient = createWalletClient({ account, transport: http(RPC) });
 // ── ABIs ────────────────────────────────────────────────────────────────────
 
 const instructionSenderAbi = parseAbi([
-  "function requestCreditScore(bytes _encryptedPayload) external payable",
+  "function requestCreditScore(bytes _encryptedPayload) external payable returns (bytes32)",
 ]);
 
 const creditVaultAbi = parseAbi([
@@ -55,7 +55,7 @@ const creditVaultAbi = parseAbi([
 /** ECIES encrypt using the TEE node's secp256k1 public key. */
 async function eciesEncrypt(pubKeyHex, plaintext) {
   // Generate ephemeral keypair
-  const ephPriv = secp256k1.utils.randomPrivateKey();
+  const ephPriv = secp256k1.utils.randomSecretKey();
   const ephPub = secp256k1.getPublicKey(ephPriv, false); // uncompressed 65 bytes
 
   // Derive shared secret via ECDH

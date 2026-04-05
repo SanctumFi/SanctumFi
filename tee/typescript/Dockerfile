@@ -25,12 +25,12 @@ FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk add --no-cache nodejs --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community && \
-    apk add --no-cache su-exec
+RUN apk add --no-cache nodejs gosu --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community
 
 RUN adduser -DH -u 1000 server && adduser -DH -u 1001 extension
 
 COPY --from=node-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=node-builder /node/assets/google_confidential_space_root.crt assets/google_confidential_space_root.crt
 COPY --from=node-builder /node/server ./
 COPY --from=ext-builder /ext/dist ./extension/dist/
 COPY --from=ext-builder /ext/node_modules ./extension/node_modules/
@@ -42,6 +42,8 @@ ENV CONFIG_PORT=5500
 ENV SIGN_PORT=8882
 ENV EXTENSION_PORT=8883
 
+LABEL "tee.launch_policy.allow_env_override"="LOG_LEVEL"
+
 EXPOSE 5500
 
-CMD ["sh", "-c", "./server & su-exec extension node extension/dist/main.js"]
+CMD ["sh", "-c", "./server & gosu extension node extension/dist/main.js"]

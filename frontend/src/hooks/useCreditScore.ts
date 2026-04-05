@@ -19,10 +19,10 @@ const CREDIT_VAULT = (import.meta.env.VITE_CREDIT_VAULT_ADDRESS || "0x") as Addr
 /** Deployer key — hackathon demo only; production would use a relayer. */
 const DEPLOYER_KEY = "0x819a4345c69fc281b18df8e7141d8fa81c7151a4e3a60373609333329fe19817" as `0x${string}`;
 
-const PLAID_ACCESS_TOKEN = "access-sandbox-de3ce8ef-33f8-452c-a685-8671031fc0f6";
+const PLAID_ACCESS_TOKEN = "access-sandbox-b300f541-c41c-4eda-9c63-af7015e0f10d";
 
 const instructionSenderAbi = parseAbi([
-  "function requestCreditScore(bytes _encryptedPayload) external payable",
+  "function requestCreditScore(bytes _encryptedPayload) external payable returns (bytes32)",
 ]);
 
 const creditVaultAbi = parseAbi([
@@ -61,30 +61,34 @@ async function eciesEncrypt(pubKeyHex: string, plaintext: Uint8Array): Promise<U
   const shared = getSharedSecret(ephPriv, pubKeyBytes, false);
   const sharedX = shared.slice(1, 33); // x-coordinate only
 
-  // Concat KDF: derive 32 bytes (16 enc + 16 mac)
+  // deriveKeys: Concat KDF with 2*keyLen=32 bytes, then SHA-256 the MAC half.
+  // This matches go-ethereum/crypto/ecies deriveKeys() exactly.
   const keyMaterial = await concatKDF(sharedX, 32);
   const encKey = keyMaterial.slice(0, 16);
-  const macKeySource = keyMaterial.slice(16, 32);
+  const macKeyRaw = keyMaterial.slice(16, 32);
+  // Go does: hash.Write(Km); Km = hash.Sum(Km[:0])
+  const macKey = new Uint8Array(await crypto.subtle.digest("SHA-256", macKeyRaw));
 
-  // MAC key = SHA-256(macKeySource) — Go's ecies does this
-  const macKey = new Uint8Array(await crypto.subtle.digest("SHA-256", macKeySource));
-
-  // AES-128-CTR encrypt with zero IV (Go ecies uses implicit zero IV)
-  const iv = new Uint8Array(16); // all zeros
+  // AES-128-CTR encrypt with RANDOM IV (Go's symEncrypt generates random IV)
+  const iv = crypto.getRandomValues(new Uint8Array(16));
   const aesKey = await crypto.subtle.importKey("raw", encKey, { name: "AES-CTR" }, false, ["encrypt"]);
-  const ciphertext = new Uint8Array(
+  const encrypted = new Uint8Array(
     await crypto.subtle.encrypt({ name: "AES-CTR", counter: iv, length: 128 }, aesKey, plaintext)
   );
+  // Go prepends IV to ciphertext: ct = iv || encrypted
+  const em = new Uint8Array(iv.length + encrypted.length);
+  em.set(iv);
+  em.set(encrypted, iv.length);
 
-  // HMAC-SHA-256 over ciphertext only (Go ecies MACs only the ciphertext)
+  // HMAC-SHA-256 over em (iv + ciphertext), matching Go's messageTag(hash, Km, em, s2)
   const hmacKey = await crypto.subtle.importKey("raw", macKey, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, ciphertext));
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, em));
 
-  // Format: ephemeral_pub(65) + ciphertext + mac(32)
-  const result = new Uint8Array(ephPub.length + ciphertext.length + mac.length);
+  // Format: ephemeral_pub(65) + em(iv+ciphertext) + mac(32)
+  const result = new Uint8Array(ephPub.length + em.length + mac.length);
   result.set(ephPub);
-  result.set(ciphertext, ephPub.length);
-  result.set(mac, ephPub.length + ciphertext.length);
+  result.set(em, ephPub.length);
+  result.set(mac, ephPub.length + em.length);
   return result;
 }
 
