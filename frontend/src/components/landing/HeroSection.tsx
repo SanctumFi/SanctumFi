@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { Button } from "../ui/button";
-import { Navbar } from "./Navbar";
+import Veil from "./Veil";
 
 interface Props {
   onConnect: () => void;
@@ -20,43 +19,43 @@ export function HeroSection({ onConnect, loading }: Props) {
 
   return (
     <section className="bg-background relative overflow-hidden min-h-screen">
-      <Navbar onConnect={onConnect} loading={loading} />
-
-      {/* Centered content with scroll blur */}
+      {/* Veil WebGL background */}
       <div
-        className="pt-40 px-4 flex flex-col items-center"
+        className="absolute inset-0"
+        style={{ filter: "grayscale(1) brightness(1.12) contrast(0.72)" }}
+      >
+        <Veil
+          color={[1, 1, 1]}
+          mouseReact={false}
+          amplitude={0}
+          speed={0.5}
+        />
+      </div>
+
+      {/* Centered content */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center px-4"
         style={{ filter: `blur(${blurAmount}px)` }}
       >
-        {/* Headline */}
         <h1
-          className="fade-in-up text-[clamp(80px,15vw,180px)] font-display font-normal leading-[0.9] tracking-[-0.02em] text-hero-heading mix-blend-multiply"
+          className="fade-in-up text-[clamp(64px,10vw,160px)] font-display font-normal leading-[0.9] tracking-[-0.02em] text-hero-heading mix-blend-multiply text-center"
         >
           Liquidity
         </h1>
 
-        {/* Subtext */}
         <p
-          className="fade-in-up text-hero-sub text-center font-body text-lg leading-relaxed max-w-lg mt-8 opacity-80"
+          className="fade-in-up text-hero-sub text-center font-body text-xl leading-relaxed max-w-xl mt-10 opacity-80 tracking-wide"
           style={{ animationDelay: "0.15s" }}
         >
-          Cryptographic protection meets
+          Your history enters the sanctum.
           <br />
-          institutional-grade marble.
+          Your collateral emerges lighter.
         </p>
 
-        {/* CTA */}
-        <div
-          className="fade-in-up mt-12 mb-[66px]"
-          style={{ animationDelay: "0.3s" }}
-        >
-          <Button
-            variant="hero"
-            className="px-[32px] py-[20px]"
-            onClick={onConnect}
-            disabled={loading}
-          >
-            {loading ? "Connecting\u2026" : "Check Credit Score"}
-          </Button>
+        <div className="fade-in-up mt-12" style={{ animationDelay: "0.3s" }}>
+          <button className="btn-veil" onClick={onConnect} disabled={loading}>
+            <span>{loading ? "Connecting\u2026" : "Check Credit Score"}</span>
+          </button>
         </div>
       </div>
     </section>

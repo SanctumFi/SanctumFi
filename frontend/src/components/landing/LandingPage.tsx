@@ -1,5 +1,5 @@
 import { HeroSection } from "./HeroSection";
-import { GalleryArtefactsSection } from "./GalleryArtefactsSection";
+import { Navbar } from "./Navbar";
 
 interface Props {
   onConnect: () => void;
@@ -9,8 +9,8 @@ interface Props {
 export function LandingPage({ onConnect, loading }: Props) {
   return (
     <div className="bg-background">
+      <Navbar onConnect={onConnect} loading={loading} />
       <HeroSection onConnect={onConnect} loading={loading} />
-      <GalleryArtefactsSection />
     </div>
   );
 }
