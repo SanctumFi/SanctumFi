@@ -15,6 +15,7 @@
     "@fontsource/instrument-sans": "^5.2.8",
     "@noble/secp256k1": "^3.0.0",
     "eciesjs": "^0.5.0",
+    "ogl": "^1.0.11",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-plaid-link": "^4.1.1",
