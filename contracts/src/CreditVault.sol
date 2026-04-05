@@ -54,7 +54,7 @@ contract CreditVault is Ownable, ReentrancyGuard {
 
     IFtsoV2  public immutable ftsoV2;
     IERC20   public immutable fxrp;
-    address  public immutable teeSigner;
+    address  public teeSigner;
     uint256  public immutable scoreExpiry;
 
     /// @notice Protocol-owned FLR liquidity (separate from user collateral).
@@ -122,6 +122,10 @@ contract CreditVault is Ownable, ReentrancyGuard {
 
     function setSmartAccountReceiver(address _sar) external onlyOwner {
         smartAccountReceiver = _sar;
+    }
+
+    function setTeeSigner(address _teeSigner) external onlyOwner {
+        teeSigner = _teeSigner;
     }
 
     // -------------------------------------------------------------------------

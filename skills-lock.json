@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "flare-fassets": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "computedHash": "da53e45dfdc3eccc07b28903f625f1cef1e1dffbfc3cc23b4c000ed370cffba7"
+    },
+    "flare-fdc": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "computedHash": "73f908663b18190e62fe8f74b1e5f220b93877f262beda5e1c2a5f0ae5cca51e"
+    },
+    "flare-ftso": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "computedHash": "c1d0d783b02f16daf571d5b9b8a740d4e6a05c468b39a6cb2a2616d0e7a2007f"
+    },
+    "flare-general": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "computedHash": "15a89f44cb1a0bf01652c9ec8d3b24a14bd9f8462cae473aa1366875f0fbd05b"
+    },
+    "flare-smart-accounts": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "computedHash": "689259573bffb7029e3442997bdfc2d557c4628e96ca1376765dc8c369bc78cc"
+    }
+  }
+}

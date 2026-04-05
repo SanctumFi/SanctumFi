@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useCreditScore } from "../hooks/useCreditScore";
 import { usePosition } from "../hooks/usePosition";
 import { ScoreDisplay } from "../components/ScoreDisplay";
@@ -6,21 +5,14 @@ import { ScoreDisplay } from "../components/ScoreDisplay";
 interface Props {
   xrplAddress: string;
   personalAccount: `0x${string}` | null;
-  sendPayment: (memo: string, amountDrops?: string, instruction?: string) => Promise<unknown>;
 }
 
-export function Score({ xrplAddress, personalAccount, sendPayment }: Props) {
-  const { requestScore, requesting, error } = useCreditScore(sendPayment);
+export function Score({ xrplAddress, personalAccount }: Props) {
+  const { requestScore, requesting, status, error } = useCreditScore(personalAccount);
   const { position } = usePosition(personalAccount);
-  const [localError, setLocalError] = useState<string | null>(null);
 
   async function handleRequestScore() {
-    setLocalError(null);
-    try {
-      await requestScore(xrplAddress);
-    } catch (e: unknown) {
-      setLocalError(e instanceof Error ? e.message : "Failed to request score");
-    }
+    await requestScore();
   }
 
   const hasScore = position && position.creditScore > 0n;
@@ -77,12 +69,18 @@ export function Score({ xrplAddress, personalAccount, sendPayment }: Props) {
           disabled={requesting}
         >
           <span>
-            {requesting ? "Sign in Xaman\u2026" : "Compute Credit Score"}
+            {requesting ? "Processing\u2026" : hasScore ? "Update Credit Score" : "Compute Credit Score"}
           </span>
         </button>
 
-        {(error || localError) && (
-          <p className="error-text">{error || localError}</p>
+        {status && (
+          <p style={{ fontSize: "11px", color: "var(--c-slate)", marginTop: "16px" }}>
+            {status}
+          </p>
+        )}
+
+        {error && (
+          <p className="error-text">{error}</p>
         )}
       </div>
     </div>

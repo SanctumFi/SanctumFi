@@ -102,7 +102,6 @@ function AppShell({
           <Score
             xrplAddress={xrplAddress}
             personalAccount={personalAccount}
-            sendPayment={sendPayment}
           />
         )}
         {tab === "lend" && (

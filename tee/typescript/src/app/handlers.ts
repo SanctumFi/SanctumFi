@@ -2,9 +2,9 @@
 
 import http from "node:http";
 import { Framework } from "../base/types.js";
-import { hexToBytes, bytesToHex } from "../base/encoding.js";
+import { hexToBytes } from "../base/encoding.js";
+import { keccak256, encodeAbiParameters, encodePacked } from "viem";
 import { VERSION, OP_TYPE_CREDIT, OP_COMMAND_SCORE } from "./config.js";
-import { encodeCreditScoreResult } from "./abi.js";
 import { fetchPlaidData } from "./plaid.js";
 import { computeCreditScore } from "./scoring.js";
 
@@ -37,7 +37,7 @@ export function reportState(): unknown {
  * The message is a hex-encoded ECIES ciphertext containing JSON:
  *   { "plaid_access_token": "...", "user_address": "0x..." }
  *
- * Returns ABI-encoded (address, uint256, uint256) = (user, score, timestamp).
+ * Returns ABI-encoded (address, uint256, uint256, bytes) = (user, score, timestamp, signature).
  */
 async function handleCreditScore(
   msg: string
@@ -86,19 +86,52 @@ async function handleCreditScore(
   const scoreResult = computeCreditScore(plaidData);
   const timestamp = Math.floor(Date.now() / 1000);
 
-  // 6. ABI-encode result as (address, uint256, uint256)
+  // 6. Sign the score with the TEE node's private key.
+  //    CreditVault verifies: keccak256(abi.encodePacked(user, score, timestamp))
+  //    wrapped with "\x19Ethereum Signed Message:\n32" prefix.
+  let signature: string;
+  try {
+    const messageHash = keccak256(
+      encodePacked(
+        ["address", "uint256", "uint256"],
+        [payload.user_address as `0x${string}`, BigInt(scoreResult.total), BigInt(timestamp)]
+      )
+    );
+    // Apply EIP-191 prefix: "\x19Ethereum Signed Message:\n32" + hash
+    const prefix = Buffer.from("\x19Ethereum Signed Message:\n32");
+    const hashBytes = hexToBytes(messageHash);
+    const ethSignedHash = new Uint8Array(prefix.length + hashBytes.length);
+    ethSignedHash.set(prefix);
+    ethSignedHash.set(hashBytes, prefix.length);
+    const toSign = keccak256(ethSignedHash);
+
+    signature = await signViaNode(hexToBytes(toSign));
+  } catch (e) {
+    return [null, 0, `TEE signing failed: ${e}`];
+  }
+
+  // 7. ABI-encode result as (address, uint256, uint256, bytes)
   let encoded: string;
   try {
-    encoded = encodeCreditScoreResult(
-      payload.user_address,
-      scoreResult.total,
-      timestamp
+    encoded = encodeAbiParameters(
+      [
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes" },
+      ],
+      [
+        payload.user_address as `0x${string}`,
+        BigInt(scoreResult.total),
+        BigInt(timestamp),
+        signature as `0x${string}`,
+      ]
     );
   } catch (e) {
     return [null, 0, `ABI encoding failed: ${e}`];
   }
 
-  // 7. Update state
+  // 8. Update state
   lastScore = {
     address: payload.user_address,
     score: scoreResult.total,
@@ -110,6 +143,52 @@ async function handleCreditScore(
   );
 
   return [encoded, 1, null];
+}
+
+/**
+ * Sign a message via the TEE node's /sign endpoint.
+ * Returns the signature as a 0x-prefixed hex string.
+ */
+function signViaNode(message: Uint8Array): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = `http://localhost:${signPort}/sign`;
+    const body = JSON.stringify({
+      message: Buffer.from(message).toString("base64"),
+    });
+
+    const req = http.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const data = Buffer.concat(chunks).toString("utf-8");
+          if (res.statusCode !== 200) {
+            reject(new Error(`sign node returned ${res.statusCode}: ${data}`));
+            return;
+          }
+          try {
+            const parsed = JSON.parse(data);
+            const sigBytes = Buffer.from(parsed.signature, "base64");
+            resolve("0x" + sigBytes.toString("hex"));
+          } catch (e) {
+            reject(new Error(`decode sign response: ${e}`));
+          }
+        });
+      }
+    );
+
+    req.on("error", (e) => reject(new Error(`sign request error: ${e.message}`)));
+    req.write(body);
+    req.end();
+  });
 }
 
 /**
