@@ -28,8 +28,8 @@ contract DeployV2 is Script {
         vault.setSmartAccountReceiver(address(receiver));
         console.log("CreditVault authorized SmartAccountReceiver");
 
-        vault.fundPoolFLR{value: 10 ether}();
-        console.log("Funded vault with 10 FLR");
+        vault.fundPoolFLR{value: 1 ether}();
+        console.log("Funded vault with 1 FLR");
 
         vm.stopBroadcast();
     }

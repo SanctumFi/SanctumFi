@@ -588,6 +588,8 @@ cast call <INSTRUCTION_SENDER> "getExtensionId()" \
 
 ### Step 3: Build and Start Docker Stack
 
+> **Warning: Docker restarts generate a new TEE keypair.** Old machines stay "active" in the on-chain registry and can't be removed. `getRandomTeeIds()` will randomly route instructions to dead machines, causing silent failures (404 on result polling). See [Redeployment after Docker Restart](#redeployment-after-docker-restart) below if you need to restart Docker.
+
 ```bash
 cd tee
 docker compose build
@@ -750,6 +752,82 @@ curl -sf <TUNNEL_URL>/info
 | redis | 6379 | 6383 | Proxy state store |
 | TEE sign server | 8882 | (internal) | Only accessible within Docker network |
 | TEE extension | 8883 | (internal) | Only accessible within Docker network |
+
+---
+
+## Redeployment after Docker Restart
+
+Every Docker restart creates a new TEE keypair. The old machine stays "active" in the `TeeMachineRegistry` (no deregistration support). If you don't redeploy, `getRandomTeeIds()` will randomly route instructions to dead machines, causing 404s on result polling.
+
+**Full redeployment checklist (run all steps in order):**
+
+```bash
+# ── 1. Deploy a fresh InstructionSender ──
+cd contracts
+forge create --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --private-key $PRIVATE_KEY --broadcast \
+  src/InstructionSender.sol:InstructionSender \
+  --constructor-args $TEE_EXTENSION_REGISTRY $TEE_MACHINE_REGISTRY
+
+# Save the new INSTRUCTION_SENDER address from the output
+
+# ── 2. Register a new extension for that InstructionSender ──
+cd ../tee/go/tools
+go run ./cmd/register-extension --instructionSender <NEW_INSTRUCTION_SENDER>
+
+# Save the new EXTENSION_ID (e.g. 302 = 0x...012e)
+
+# ── 3. Link extension ID to the InstructionSender contract ──
+cast send <NEW_INSTRUCTION_SENDER> "setExtensionId()" \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --private-key $PRIVATE_KEY
+
+# Verify:
+cast call <NEW_INSTRUCTION_SENDER> "getExtensionId()" \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc
+
+# ── 4. Redeploy CreditVault + SmartAccountReceiver ──
+# Update contracts/script/DeployV2.s.sol with the new InstructionSender address
+# and extension ID, then:
+cd ../../contracts
+forge script script/DeployV2.s.sol:DeployV2 \
+  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
+  --broadcast -vvv
+
+# Save CREDIT_VAULT and SMART_ACCOUNT_RECEIVER addresses
+
+# ── 5. Restart Docker (new keypair for new extension) ──
+cd ../tee
+docker compose down
+docker compose up -d --build
+
+# Wait for proxy to be healthy:
+until curl -sf http://localhost:6676/info >/dev/null 2>&1; do sleep 2; done
+
+# ── 6. Start tunnel ──
+# In a separate terminal:
+cloudflared tunnel --url http://localhost:6676
+# Copy the HTTPS URL
+
+# ── 7. Register TEE version + machine for new extension ──
+cd go/tools
+go run ./cmd/allow-tee-version -p http://localhost:6676
+go run ./cmd/register-tee -p http://localhost:6676 -l
+
+# ── 8. Update frontend .env ──
+# Set these in frontend/.env:
+#   VITE_CREDIT_VAULT_ADDRESS=<new CreditVault>
+#   VITE_SMART_ACCOUNT_RECEIVER_ADDRESS=<new SmartAccountReceiver>
+#   VITE_INSTRUCTION_SENDER_ADDRESS=<new InstructionSender>
+
+# ── 9. Restart frontend dev server ──
+cd ../../frontend
+# Kill and restart: npm run dev
+```
+
+**Why all this is needed:** The `TeeMachineRegistry` doesn't support deregistration. Each Docker restart registers a new machine for the same extension, diluting the pool with dead machines. A fresh extension guarantees only 1 machine (the live one) exists.
+
+**Shortcut if you skip redeployment:** The frontend has a retry loop (up to 5 attempts) that re-sends the on-chain instruction each time, getting a new random TEE machine selection. With N dead + 1 alive machine, it will succeed within ~N+1 attempts on average. This costs extra gas but works without redeploying.
 
 ---
 

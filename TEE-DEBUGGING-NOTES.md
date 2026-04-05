@@ -177,8 +177,8 @@ function requestCreditScore(bytes calldata _encryptedPayload) external payable r
 
 | Contract | Address |
 |----------|---------|
-| CreditVault | `0x0e6f0C75C2C2f4B7bCabfF67dB2fDA287f1DaF54` |
-| SmartAccountReceiver | `0x39E3Cfcd3d39215a4406a607460f6f9B703202A5` |
+| CreditVault | `0x64cF35Cfdb4ea921588721EBAc432BaFE0B84cE7` |
+| SmartAccountReceiver | `0x8a7703f4c8438628a0c778c41989Ed186AB19347` |
 | InstructionSender | `0xBc136df2065B662177C163bbF2c17e5f5E9222c7` (ext 300) |
 | TeeExtensionRegistry | `0x3d478d43426081BD5854be9C7c5c183bfe76C981` |
 | TeeMachineRegistry | `0x5918Cd58e5caf755b8584649Aa24077822F87613` |
@@ -188,3 +188,31 @@ function requestCreditScore(bytes calldata _encryptedPayload) external payable r
 **Old approach:** `CreditVault` stored a mutable `teeSigner` address. After every Docker restart (new TEE keypair), the owner had to call `setTeeSigner(newAddress)` manually.
 
 **New approach:** `CreditVault` now takes `TeeMachineRegistry` and `extensionId` as immutable constructor params. On `receiveScore()`, it recovers the ECDSA signer and calls `teeMachineRegistry.getExtensionId(signer)` to verify the signer is an active TEE machine for the correct extension. No manual setup step needed.
+
+---
+
+## 10. Frontend Retry Loop for Dead TEE Machines
+
+**Symptom:** Credit score request goes on-chain successfully, but the TEE proxy returns 404 indefinitely. Console floods with `GET /tee-proxy/action/result/0x... 404 (Not Found)`.
+
+**Root cause:** Same as §4 — `getRandomTeeIds()` picks a dead TEE machine. With N dead + 1 alive, there's only a `1/(N+1)` chance per attempt.
+
+**Why §4's "fresh extension per restart" fix is hard to apply consistently:**
+- The `register-tee` tool reads the extension ID from the proxy's `/info` endpoint, which reports whatever extension the TEE machine is *currently* registered for on-chain.
+- A brand new Docker container (new keypair, never registered) inherits the extension from the registration process — the tools don't accept an `--extension` flag override.
+- This creates a chicken-and-egg: you create extension 302 for a new InstructionSender, but `register-tee` registers the new machine to extension 300 because that's what the proxy reports.
+
+**Pragmatic fix:** Added a retry loop in `useCreditScore.ts` that sends up to 5 on-chain `requestCreditScore` calls, each with a shorter polling window (20 attempts × 2s = 40s). If the randomly selected TEE machine is dead, the poll times out and the frontend retries with a new random selection. With 3 machines (2 dead + 1 alive), expected success within ~3 attempts.
+
+```typescript
+for (let attempt = 1; attempt <= MAX_TEE_ATTEMPTS; attempt++) {
+  // send instruction on-chain (new random TEE machine each time)
+  // poll for result with short timeout
+  // if poll times out → retry
+  // if result received → break
+}
+```
+
+**Cost:** Each retry costs ~0.000001 FLR gas. Acceptable for hackathon demo.
+
+**Proper fix (future):** The `TeeMachineRegistry` should support deregistration of dead machines, or the `register-tee` tool should accept an explicit `--extension` flag. Until then, minimize Docker restarts and redeploy everything (fresh InstructionSender + new extension) when you do.

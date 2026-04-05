@@ -163,7 +163,8 @@ export function useCreditScore(personalAccount: Address | null) {
       const encrypted = await eciesEncrypt(pubKeyHex, new TextEncoder().encode(payload));
 
       // 3. Send requestCreditScore on-chain via deployer key
-      setStatus("Sending instruction to TEE...");
+      //    Retry up to 5 times — dead TEE machines in the registry cause random
+      //    routing failures (see TEE-DEBUGGING-NOTES.md §4).
       const account = privateKeyToAccount(DEPLOYER_KEY);
       const walletClient = createWalletClient({
         chain: flareTestnet,
@@ -171,36 +172,44 @@ export function useCreditScore(personalAccount: Address | null) {
         account,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: INSTRUCTION_SENDER,
-        abi: instructionSenderAbi,
-        functionName: "requestCreditScore",
-        args: [u8ToHex(encrypted)],
-        value: 1_000_000_000_000n, // 0.000001 FLR fee
-      });
-
-      setStatus("Transaction sent, waiting for confirmation...");
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      if (receipt.status !== "success") throw new Error("Transaction reverted");
-
-      // 4. Extract instruction ID from TeeExtensionRegistry log
-      // The event is at log[0] from address 0x3d47..., instructionId is in topics[2]
       const TEE_REGISTRY = "0x3d478d43426081bd5854be9c7c5c183bfe76c981";
-      let instructionId: string | null = null;
+      const MAX_TEE_ATTEMPTS = 5;
+      let result: { data: `0x${string}`; status: number; log: string } | null = null;
 
-      for (const log of receipt.logs) {
-        if (log.address.toLowerCase() === TEE_REGISTRY && log.topics.length >= 3) {
-          instructionId = log.topics[2];
-          break;
+      for (let attempt = 1; attempt <= MAX_TEE_ATTEMPTS; attempt++) {
+        setStatus(`Sending instruction to TEE (attempt ${attempt}/${MAX_TEE_ATTEMPTS})...`);
+
+        const txHash = await walletClient.writeContract({
+          address: INSTRUCTION_SENDER,
+          abi: instructionSenderAbi,
+          functionName: "requestCreditScore",
+          args: [u8ToHex(encrypted)],
+          value: 1_000_000_000_000n, // 0.000001 FLR fee
+        });
+
+        setStatus("Transaction sent, waiting for confirmation...");
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        if (receipt.status !== "success") throw new Error("Transaction reverted");
+
+        let instructionId: string | null = null;
+        for (const log of receipt.logs) {
+          if (log.address.toLowerCase() === TEE_REGISTRY && log.topics.length >= 3) {
+            instructionId = log.topics[2];
+            break;
+          }
+        }
+        if (!instructionId) throw new Error("Could not find instruction ID in transaction logs");
+        console.log(`Attempt ${attempt} — Instruction ID:`, instructionId);
+
+        setStatus("TEE is computing your credit score...");
+        try {
+          result = await pollResult(instructionId, setStatus, 20); // shorter poll per attempt
+          break; // success — exit retry loop
+        } catch {
+          console.warn(`Attempt ${attempt} timed out (likely dead TEE machine), retrying...`);
+          if (attempt === MAX_TEE_ATTEMPTS) throw new Error("All TEE attempts timed out — no live machine responded");
         }
       }
-
-      if (!instructionId) throw new Error("Could not find instruction ID in transaction logs");
-      console.log("Instruction ID:", instructionId);
-
-      // 5. Poll proxy for TEE result
-      setStatus("TEE is computing your credit score...");
-      const result = await pollResult(instructionId, setStatus);
 
       // 6. Decode result: (address, uint256, uint256, bytes)
       setStatus("Score computed! Submitting to blockchain...");
@@ -211,7 +220,7 @@ export function useCreditScore(personalAccount: Address | null) {
           { type: "uint256", name: "timestamp" },
           { type: "bytes", name: "signature" },
         ],
-        result.data as `0x${string}`,
+        result!.data as `0x${string}`,
       );
 
       const [user, score, timestamp, signature] = decoded;
