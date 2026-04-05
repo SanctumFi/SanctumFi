@@ -7,11 +7,12 @@ import {
   type Address,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { utils as secpUtils, getPublicKey, getSharedSecret } from "@noble/secp256k1";
 import { publicClient, flareTestnet } from "../lib/flareClient";
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-const PROXY_URL = "http://localhost:6676";
+const PROXY_URL = "/tee-proxy";
 const INSTRUCTION_SENDER = (import.meta.env.VITE_INSTRUCTION_SENDER_ADDRESS || "0x") as Address;
 const CREDIT_VAULT = (import.meta.env.VITE_CREDIT_VAULT_ADDRESS || "0x") as Address;
 
@@ -28,44 +29,62 @@ const creditVaultAbi = parseAbi([
   "function receiveScore(address user, uint256 score, uint256 timestamp, bytes sig) external",
 ]);
 
-// ── ECIES encryption (matches TEE node's Go ECIES) ─────────────────────────
+// ── ECIES encryption (matches go-ethereum/crypto/ecies ECIES_AES128_SHA256) ──
+
+/**
+ * NIST SP 800-56A Concat KDF with SHA-256.
+ * Matches Go's ecies concatKDF implementation.
+ */
+async function concatKDF(sharedSecret: Uint8Array, keyLen: number): Promise<Uint8Array> {
+  const reps = Math.ceil(keyLen / 32);
+  const result = new Uint8Array(reps * 32);
+  for (let counter = 1; counter <= reps; counter++) {
+    const buf = new Uint8Array(4 + sharedSecret.length);
+    // Big-endian counter
+    buf[0] = (counter >> 24) & 0xff;
+    buf[1] = (counter >> 16) & 0xff;
+    buf[2] = (counter >> 8) & 0xff;
+    buf[3] = counter & 0xff;
+    buf.set(sharedSecret, 4);
+    const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
+    result.set(hash, (counter - 1) * 32);
+  }
+  return result.slice(0, keyLen);
+}
 
 async function eciesEncrypt(pubKeyHex: string, plaintext: Uint8Array): Promise<Uint8Array> {
-  // Generate ephemeral secp256k1 keypair
-  const { etc: secpEtc, getPublicKey, getSharedSecret } = await import("@noble/secp256k1");
-  const ephPriv = secpEtc.randomPrivateKey();
+  const ephPriv = secpUtils.randomSecretKey();
   const ephPub = getPublicKey(ephPriv, false); // uncompressed 65 bytes
 
-  // ECDH shared secret
+  // ECDH: shared secret = x-coordinate of ephPriv * recipientPub
   const pubKeyBytes = hexToU8(pubKeyHex);
   const shared = getSharedSecret(ephPriv, pubKeyBytes, false);
-  const sharedX = shared.slice(1, 33);
+  const sharedX = shared.slice(1, 33); // x-coordinate only
 
-  // KDF: SHA-256 of shared x-coordinate
-  const keyMaterial = new Uint8Array(await crypto.subtle.digest("SHA-256", sharedX));
+  // Concat KDF: derive 32 bytes (16 enc + 16 mac)
+  const keyMaterial = await concatKDF(sharedX, 32);
   const encKey = keyMaterial.slice(0, 16);
-  const macKey = keyMaterial.slice(16, 32);
+  const macKeySource = keyMaterial.slice(16, 32);
 
-  // AES-128-CTR encrypt
-  const iv = crypto.getRandomValues(new Uint8Array(16));
+  // MAC key = SHA-256(macKeySource) — Go's ecies does this
+  const macKey = new Uint8Array(await crypto.subtle.digest("SHA-256", macKeySource));
+
+  // AES-128-CTR encrypt with zero IV (Go ecies uses implicit zero IV)
+  const iv = new Uint8Array(16); // all zeros
   const aesKey = await crypto.subtle.importKey("raw", encKey, { name: "AES-CTR" }, false, ["encrypt"]);
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt({ name: "AES-CTR", counter: iv, length: 128 }, aesKey, plaintext)
   );
 
-  // HMAC-SHA-256 over iv + ciphertext
+  // HMAC-SHA-256 over ciphertext only (Go ecies MACs only the ciphertext)
   const hmacKey = await crypto.subtle.importKey("raw", macKey, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const macData = new Uint8Array(iv.length + ciphertext.length);
-  macData.set(iv);
-  macData.set(ciphertext, iv.length);
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, macData));
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, ciphertext));
 
-  // Format: ephemeral_pub(65) + iv(16) + ciphertext + mac(32)
-  const result = new Uint8Array(ephPub.length + iv.length + ciphertext.length + mac.length);
+  // Format: ephemeral_pub(65) + ciphertext + mac(32)
+  const result = new Uint8Array(ephPub.length + ciphertext.length + mac.length);
   result.set(ephPub);
-  result.set(iv, ephPub.length);
-  result.set(ciphertext, ephPub.length + iv.length);
-  result.set(mac, ephPub.length + iv.length + ciphertext.length);
+  result.set(ciphertext, ephPub.length);
+  result.set(mac, ephPub.length + ciphertext.length);
   return result;
 }
 
@@ -87,17 +106,21 @@ async function pollResult(
   onProgress?: (msg: string) => void,
   maxAttempts = 90,
 ): Promise<{ data: `0x${string}`; status: number; log: string }> {
+  const url = `${PROXY_URL}/action/result/${instructionId}`;
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const resp = await fetch(`${PROXY_URL}/action/result/${instructionId}`);
+      const resp = await fetch(url);
       if (resp.ok) {
         const json = await resp.json();
         const r = json?.result ?? json;
         if (r?.status >= 1) return r;
-        if (r?.status === 0) throw new Error(r.log || "TEE processing failed");
+        // status 0 = error, but TEE retries on decrypt failure so wait for retry
+        if (r?.status === 0 && r.log && !r.log.includes("decrypt")) {
+          throw new Error(r.log);
+        }
       }
     } catch (e: unknown) {
-      if (e instanceof Error && e.message.includes("TEE processing failed")) throw e;
+      if (e instanceof Error && !e.message.includes("fetch")) throw e;
     }
     if (i % 5 === 0) onProgress?.(`Waiting for TEE result (${i + 1}/${maxAttempts})...`);
     await new Promise((r) => setTimeout(r, 2000));
@@ -156,28 +179,20 @@ export function useCreditScore(personalAccount: Address | null) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       if (receipt.status !== "success") throw new Error("Transaction reverted");
 
-      // 4. Extract instruction ID from logs
-      // The TeeExtensionRegistry emits TeeInstructionsSent with instructionId in the event data
+      // 4. Extract instruction ID from TeeExtensionRegistry log
+      // The event is at log[0] from address 0x3d47..., instructionId is in topics[2]
+      const TEE_REGISTRY = "0x3d478d43426081bd5854be9c7c5c183bfe76c981";
       let instructionId: string | null = null;
+
       for (const log of receipt.logs) {
-        // TeeInstructionsSent event — instructionId is typically in data
-        if (log.address.toLowerCase() === "0x3d478d43426081BD5854be9C7c5c183bfe76C981".toLowerCase()) {
-          // The instruction ID is a bytes32 in the event
-          if (log.data.length >= 66) {
-            instructionId = log.data.slice(0, 66);
-          }
+        if (log.address.toLowerCase() === TEE_REGISTRY && log.topics.length >= 3) {
+          instructionId = log.topics[2];
           break;
         }
       }
 
-      if (!instructionId) {
-        // Fallback: try first log
-        if (receipt.logs.length > 0 && receipt.logs[0].data.length >= 66) {
-          instructionId = receipt.logs[0].data.slice(0, 66);
-        }
-      }
-
       if (!instructionId) throw new Error("Could not find instruction ID in transaction logs");
+      console.log("Instruction ID:", instructionId);
 
       // 5. Poll proxy for TEE result
       setStatus("TEE is computing your credit score...");
