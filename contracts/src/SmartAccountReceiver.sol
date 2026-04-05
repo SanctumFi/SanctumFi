@@ -93,6 +93,13 @@ contract SmartAccountReceiver {
         emit ActionRouted(xrplAddress, "repay");
     }
 
+    /// @notice Withdraw FLR collateral on behalf of an XRPL user.
+    function handleWithdraw(bytes32 xrplAddress, address asset, uint256 amount) external {
+        address user = _getOrCreateFlareAddress(xrplAddress);
+        vault.withdrawCollateralFor(user, asset, amount);
+        emit ActionRouted(xrplAddress, "withdraw");
+    }
+
     /// @notice Accept FLR from vault (borrow proceeds, refunds).
     receive() external payable {}
 }

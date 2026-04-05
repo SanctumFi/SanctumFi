@@ -14,7 +14,7 @@ contract DeployV2 is Script {
         address teeSigner = vm.envOr("TEE_SIGNER", vm.addr(deployerPrivateKey));
 
         // Reuse existing InstructionSender registered as extension 271
-        address instructionSender = 0xA9F3bFd8233314E6198027BD9487904C2af33003;
+        address instructionSender = 0xBc136df2065B662177C163bbF2c17e5f5E9222c7;
 
         vm.startBroadcast(deployerPrivateKey);
 

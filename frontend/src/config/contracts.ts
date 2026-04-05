@@ -25,6 +25,7 @@ export const creditVaultAbi = [
   { type: "function", name: "depositFXRP", inputs: [{ name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "borrow", inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "repay", inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }], outputs: [], stateMutability: "payable" },
+  { type: "function", name: "withdrawCollateral", inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
 ] as const satisfies Abi;
 
 export const masterAccountControllerAbi = [

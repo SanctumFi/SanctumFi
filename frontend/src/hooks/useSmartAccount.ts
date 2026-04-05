@@ -100,8 +100,15 @@ export function useSmartAccount(xumm: Xumm, xrplAddress: string | null) {
 
     if (!payload) throw new Error("Failed to create Xaman payload");
 
-    const result = await xumm.payload?.subscribe(payload.uuid);
-    const txHash = (result as any)?.payload?.response?.txid || "";
+    let result: any;
+    try {
+      result = await xumm.payload?.subscribe(payload.uuid);
+    } catch (e: any) {
+      // Xumm SDK bug: tries to close WebSocket with code 1002 (invalid).
+      // The payment is already sent at this point, so we can safely ignore.
+      if (e?.name !== "InvalidAccessError") throw e;
+    }
+    const txHash = result?.payload?.response?.txid || "";
     console.log("XRPL payment sent:", txHash);
 
     // 5. Return a function to wait for Flare-side execution
@@ -137,7 +144,11 @@ export function useSmartAccount(xumm: Xumm, xrplAddress: string | null) {
     });
 
     if (!payload) throw new Error("Failed to create payload");
-    return xumm.payload?.subscribe(payload.uuid);
+    try {
+      return await xumm.payload?.subscribe(payload.uuid);
+    } catch (e: any) {
+      if (e?.name !== "InvalidAccessError") throw e;
+    }
   }
 
   return { personalAccount, operatorAddress, sendPayment, sendCustom };

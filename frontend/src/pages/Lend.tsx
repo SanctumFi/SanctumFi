@@ -2,6 +2,7 @@ import { usePosition } from "../hooks/usePosition";
 import { DepositForm } from "../components/DepositForm";
 import { BorrowForm } from "../components/BorrowForm";
 import { RepayForm } from "../components/RepayForm";
+import { WithdrawForm } from "../components/WithdrawForm";
 import { type CustomInstruction } from "../lib/smartAccounts";
 
 interface Props {
@@ -29,7 +30,7 @@ export function Lend({ personalAccount, sendCustom }: Props) {
       className="reveal"
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateColumns: "repeat(4, 1fr)",
         gap: "1px",
         background: "var(--c-mist)",
         border: "1px solid var(--c-mist)",
@@ -42,6 +43,7 @@ export function Lend({ personalAccount, sendCustom }: Props) {
         onSuccess={refresh}
       />
       <RepayForm sendCustom={sendCustom} onSuccess={refresh} />
+      <WithdrawForm sendCustom={sendCustom} onSuccess={refresh} />
     </div>
   );
 }

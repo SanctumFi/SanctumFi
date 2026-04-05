@@ -18,4 +18,5 @@ interface ICreditVault {
     function depositFXRPFor(address user, uint256 amount) external;
     function borrowFor(address user, address asset, uint256 amount) external;
     function repayFor(address user, address asset, uint256 amount) external payable;
+    function withdrawCollateralFor(address user, address asset, uint256 amount) external;
 }

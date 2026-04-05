@@ -182,6 +182,37 @@ contract CreditVault is Ownable, ReentrancyGuard {
         emit Borrowed(user, asset, amount);
     }
 
+    function withdrawCollateralFor(address user, address asset, uint256 amount) external onlySmartAccount nonReentrant {
+        require(amount > 0, "CreditVault: zero amount");
+        Position storage pos = positions[user];
+
+        if (asset == address(0)) {
+            require(pos.flrCollateral >= amount, "CreditVault: insufficient FLR collateral");
+            pos.flrCollateral -= amount;
+        } else {
+            require(asset == address(fxrp), "CreditVault: unknown asset");
+            require(pos.fxrpCollateral >= amount, "CreditVault: insufficient FXRP collateral");
+            pos.fxrpCollateral -= amount;
+        }
+
+        // If debt exists, ensure position is still healthy after withdrawal.
+        uint256 debtUSD = _debtValueUSDCached(pos);
+        if (debtUSD > 0) {
+            uint256 colUSD = _collateralValueUSDCached(pos);
+            uint256 ltvBps = getLtvBps(pos.creditScore);
+            require(colUSD * BASIS_POINTS >= debtUSD * ltvBps, "CreditVault: would breach LTV");
+        }
+
+        if (asset == address(0)) {
+            (bool ok,) = msg.sender.call{value: amount}("");
+            require(ok, "CreditVault: FLR transfer failed");
+        } else {
+            fxrp.safeTransfer(msg.sender, amount);
+        }
+
+        emit CollateralWithdrawn(user, asset, amount);
+    }
+
     function repayFor(address user, address asset, uint256 amount) external payable onlySmartAccount nonReentrant {
         Position storage pos = positions[user];
 

@@ -182,6 +182,19 @@ export function buildBorrowInstruction(asset: Address, amountWei: bigint): Custo
   }];
 }
 
+/** Build a withdraw FLR collateral instruction. */
+export function buildWithdrawInstruction(amountWei: bigint): CustomInstruction[] {
+  return [{
+    targetContract: CREDIT_VAULT,
+    value: 0n,
+    data: encodeFunctionData({
+      abi: creditVaultAbi,
+      functionName: "withdrawCollateral",
+      args: ["0x0000000000000000000000000000000000000000" as Address, amountWei],
+    }),
+  }];
+}
+
 /** Build a repay FLR instruction. */
 export function buildRepayInstruction(amountWei: bigint): CustomInstruction[] {
   return [{
