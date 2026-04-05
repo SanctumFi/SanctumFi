@@ -38,9 +38,9 @@ export function HeroSection({ onConnect, loading }: Props) {
         style={{ filter: `blur(${blurAmount}px)` }}
       >
         <h1
-          className="fade-in-up text-[clamp(64px,10vw,160px)] font-display font-normal leading-[0.9] tracking-[-0.02em] text-hero-heading mix-blend-multiply text-center"
+          className="fade-in-up text-[clamp(48px,6vw,96px)] font-display font-normal leading-[0.9] tracking-[-0.02em] text-hero-heading mix-blend-multiply text-center"
         >
-          Liquidity
+          The Worthy Shall Borrow More
         </h1>
 
         <p
@@ -51,12 +51,6 @@ export function HeroSection({ onConnect, loading }: Props) {
           <br />
           Your collateral emerges lighter.
         </p>
-
-        <div className="fade-in-up mt-12" style={{ animationDelay: "0.3s" }}>
-          <button className="btn-veil" onClick={onConnect} disabled={loading}>
-            <span>{loading ? "Connecting\u2026" : "Check Credit Score"}</span>
-          </button>
-        </div>
       </div>
     </section>
   );
