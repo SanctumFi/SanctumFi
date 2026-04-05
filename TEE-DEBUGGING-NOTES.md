@@ -177,7 +177,14 @@ function requestCreditScore(bytes calldata _encryptedPayload) external payable r
 
 | Contract | Address |
 |----------|---------|
-| CreditVault | `0x4b9143eb678D529A604923B38cDd17c4DfD5e1b0` |
-| InstructionSender | Check `tee/.env` — changes per restart |
+| CreditVault | `0x0e6f0C75C2C2f4B7bCabfF67dB2fDA287f1DaF54` |
+| SmartAccountReceiver | `0x39E3Cfcd3d39215a4406a607460f6f9B703202A5` |
+| InstructionSender | `0xBc136df2065B662177C163bbF2c17e5f5E9222c7` (ext 300) |
 | TeeExtensionRegistry | `0x3d478d43426081BD5854be9C7c5c183bfe76C981` |
 | TeeMachineRegistry | `0x5918Cd58e5caf755b8584649Aa24077822F87613` |
+
+## 9. TEE Signer Verification Refactor
+
+**Old approach:** `CreditVault` stored a mutable `teeSigner` address. After every Docker restart (new TEE keypair), the owner had to call `setTeeSigner(newAddress)` manually.
+
+**New approach:** `CreditVault` now takes `TeeMachineRegistry` and `extensionId` as immutable constructor params. On `receiveScore()`, it recovers the ECDSA signer and calls `teeMachineRegistry.getExtensionId(signer)` to verify the signer is an active TEE machine for the correct extension. No manual setup step needed.

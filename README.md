@@ -149,7 +149,7 @@ The raw banking data **never leaves the TEE enclave**. Only the score and its cr
 
 ### 4. Score Lands On-Chain
 
-The frontend polls the TEE proxy for the result, then calls `CreditVault.receiveScore(user, score, timestamp, signature)`. The vault verifies the ECDSA signature against the registered TEE signer address using `ecrecover`. If valid, the score is stored in the user's position with a 24-hour expiry.
+The frontend polls the TEE proxy for the result, then calls `CreditVault.receiveScore(user, score, timestamp, signature)`. The vault recovers the signer via `ecrecover` and verifies it is a registered active TEE machine for the extension by querying `TeeMachineRegistry.getExtensionId(signer)`. No manual `setTeeSigner` needed — any machine registered for the extension is automatically trusted. If valid, the score is stored in the user's position with a 24-hour expiry.
 
 ### 5. Deposit, Borrow, Repay
 
@@ -199,7 +199,7 @@ The extension runs as a Docker Compose stack with three containers:
 - ECIES encryption ensures the Plaid token is only readable inside the TEE
 - The TEE node's private key never leaves the enclave
 - `/decrypt` and `/sign` endpoints are only accessible within the Docker network
-- Results are ECDSA-signed — the vault verifies the signer matches the registered TEE address
+- Results are ECDSA-signed — the vault verifies the signer is a registered active TEE machine via `TeeMachineRegistry` (no manual signer setup needed)
 - Signature v-value is converted from TEE format (0/1) to Solidity format (27/28)
 
 ---
@@ -227,7 +227,7 @@ struct Position {
 
 | Function | Description |
 |----------|-------------|
-| `receiveScore(user, score, timestamp, sig)` | TEE signer submits attested credit score |
+| `receiveScore(user, score, timestamp, sig)` | Verifies signer is registered TEE machine, stores score |
 | `depositFLR()` / `depositFXRP(amount)` | Deposit collateral |
 | `borrow(asset, amount)` | Borrow against collateral up to tier LTV |
 | `repay(asset, amount)` | Repay debt + accrued 5% APR fees |
@@ -389,6 +389,7 @@ Veil/
 │   │   │   ├── BorrowForm.tsx
 │   │   │   ├── DepositForm.tsx
 │   │   │   ├── RepayForm.tsx
+│   │   │   ├── WithdrawForm.tsx
 │   │   │   └── XrplGuide.tsx
 │   │   ├── hooks/
 │   │   │   ├── useCreditScore.ts       # Full TEE score request flow (ECIES + polling)
@@ -533,7 +534,7 @@ forge script script/Deploy.s.sol \
 
 This deploys:
 1. `InstructionSender` — TEE score request router
-2. `CreditVault` — lending core (linked to FTSO V2 + TEE signer)
+2. `CreditVault` — lending core (linked to FTSO V2 + TeeMachineRegistry for trustless TEE signer verification)
 3. `SmartAccountReceiver` — XRPL bridge
 4. Authorizes `SmartAccountReceiver` on the vault
 5. Seeds the vault with 10 FLR initial liquidity
@@ -679,26 +680,7 @@ INFO  Registered TEE node with id 0x<TEE_ADDRESS>
 
 ---
 
-### Step 7: Set TEE Node as Trusted Signer
-
-The `CreditVault` needs to know which TEE address is allowed to submit credit scores:
-
-```bash
-cast send <CREDIT_VAULT> "setTeeSigner(address)" <TEE_ADDRESS> \
-  --rpc-url https://coston2-api.flare.network/ext/C/rpc \
-  --private-key $PRIVATE_KEY
-```
-
-Verify:
-```bash
-cast call <CREDIT_VAULT> "teeSigner()" \
-  --rpc-url https://coston2-api.flare.network/ext/C/rpc
-# Should return the TEE address
-```
-
----
-
-### Step 8: Start Frontend
+### Step 7: Start Frontend
 
 Update `frontend/.env.local` with the deployed addresses:
 
@@ -742,7 +724,6 @@ RPC=https://coston2-api.flare.network/ext/C/rpc
 
 # Contracts deployed and configured
 cast call <CREDIT_VAULT> "owner()" --rpc-url $RPC
-cast call <CREDIT_VAULT> "teeSigner()" --rpc-url $RPC
 cast call <CREDIT_VAULT> "smartAccountReceiver()" --rpc-url $RPC
 cast balance <CREDIT_VAULT> --rpc-url $RPC --ether
 

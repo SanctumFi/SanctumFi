@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./interfaces/IFtsoV2.sol";
+import "./interfaces/ITeeMachineRegistry.sol";
 
 /// @title CreditVault — TEE credit-scored lending engine for FlareScore
 contract CreditVault is Ownable, ReentrancyGuard {
@@ -54,7 +55,8 @@ contract CreditVault is Ownable, ReentrancyGuard {
 
     IFtsoV2  public immutable ftsoV2;
     IERC20   public immutable fxrp;
-    address  public teeSigner;
+    ITeeMachineRegistry public immutable teeMachineRegistry;
+    uint256  public immutable extensionId;
     uint256  public immutable scoreExpiry;
 
     /// @notice Protocol-owned FLR liquidity (separate from user collateral).
@@ -83,13 +85,15 @@ contract CreditVault is Ownable, ReentrancyGuard {
     constructor(
         address _ftsoV2,
         address _fxrp,
-        address _teeSigner,
+        address _teeMachineRegistry,
+        uint256 _extensionId,
         uint256 _scoreExpiry
     ) Ownable(msg.sender) {
-        ftsoV2      = IFtsoV2(_ftsoV2);
-        fxrp        = IERC20(_fxrp);
-        teeSigner   = _teeSigner;
-        scoreExpiry = _scoreExpiry;
+        ftsoV2             = IFtsoV2(_ftsoV2);
+        fxrp               = IERC20(_fxrp);
+        teeMachineRegistry = ITeeMachineRegistry(_teeMachineRegistry);
+        extensionId        = _extensionId;
+        scoreExpiry        = _scoreExpiry;
     }
 
     // -------------------------------------------------------------------------
@@ -122,10 +126,6 @@ contract CreditVault is Ownable, ReentrancyGuard {
 
     function setSmartAccountReceiver(address _sar) external onlyOwner {
         smartAccountReceiver = _sar;
-    }
-
-    function setTeeSigner(address _teeSigner) external onlyOwner {
-        teeSigner = _teeSigner;
     }
 
     // -------------------------------------------------------------------------
@@ -262,11 +262,14 @@ contract CreditVault is Ownable, ReentrancyGuard {
         uint256 timestamp,
         bytes calldata sig
     ) external {
-        // Bug 4: verify ECDSA signature from the trusted TEE signer.
+        // Verify ECDSA signature from a registered TEE machine.
         bytes32 messageHash    = keccak256(abi.encodePacked(user, score, timestamp));
         bytes32 ethSignedHash  = MessageHashUtils.toEthSignedMessageHash(messageHash);
         address recovered      = ECDSA.recover(ethSignedHash, sig);
-        require(recovered == teeSigner, "CreditVault: invalid TEE signature");
+
+        // Check recovered signer is an active TEE machine for our extension.
+        uint256 signerExtId = teeMachineRegistry.getExtensionId(recovered);
+        require(signerExtId == extensionId, "CreditVault: signer not a registered TEE machine");
 
         require(score <= 1000, "CreditVault: score out of range");
 

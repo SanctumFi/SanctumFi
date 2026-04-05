@@ -37,12 +37,36 @@ contract MockFXRP is ERC20 {
 }
 
 // ---------------------------------------------------------------------------
+// Mock TeeMachineRegistry — returns a fixed extension ID for registered signers.
+// ---------------------------------------------------------------------------
+contract MockTeeMachineRegistryForVault {
+    mapping(address => uint256) public extensionIds;
+
+    function registerMachine(address teeId, uint256 extId) external {
+        extensionIds[teeId] = extId;
+    }
+
+    function getExtensionId(address teeId) external view returns (uint256) {
+        return extensionIds[teeId];
+    }
+
+    function getRandomTeeIds(uint256, uint256) external pure returns (address[] memory) {
+        return new address[](0);
+    }
+
+    function getActiveTeeMachines(uint256) external pure returns (address[] memory, string[] memory) {
+        return (new address[](0), new string[](0));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // CreditVault Tests
 // ---------------------------------------------------------------------------
 contract CreditVaultTest is Test {
     CreditVault internal vault;
     MockFtsoV2  internal ftso;
     MockFXRP    internal fxrp;
+    MockTeeMachineRegistryForVault internal mockRegistry;
 
     address internal owner      = address(this);
     address internal alice      = makeAddr("alice");
@@ -53,6 +77,7 @@ contract CreditVaultTest is Test {
     uint256 internal constant TEE_PRIVATE_KEY = 0xBEEF;
     address internal teeSigner;
 
+    uint256 internal constant EXTENSION_ID = 300;
     uint256 internal constant SCORE_EXPIRY = 30 days;
 
     function setUp() public {
@@ -60,10 +85,14 @@ contract CreditVaultTest is Test {
 
         ftso  = new MockFtsoV2();
         fxrp  = new MockFXRP();
+        mockRegistry = new MockTeeMachineRegistryForVault();
+        mockRegistry.registerMachine(teeSigner, EXTENSION_ID);
+
         vault = new CreditVault(
             address(ftso),
             address(fxrp),
-            teeSigner,
+            address(mockRegistry),
+            EXTENSION_ID,
             SCORE_EXPIRY
         );
 
@@ -150,7 +179,7 @@ contract CreditVaultTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xDEAD, ethHash); // wrong key
         bytes memory badSig = abi.encodePacked(r, s, v);
 
-        vm.expectRevert("CreditVault: invalid TEE signature");
+        vm.expectRevert("CreditVault: signer not a registered TEE machine");
         vault.receiveScore(alice, 750, block.timestamp, badSig);
     }
 

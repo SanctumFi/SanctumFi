@@ -4,13 +4,40 @@ pragma solidity ^0.8.25;
 import "forge-std/Test.sol";
 import "../src/CreditVault.sol";
 import "../src/interfaces/IFtsoV2.sol";
+import "../src/interfaces/ITeeMachineRegistry.sol";
+
+// ---------------------------------------------------------------------------
+// Mock TeeMachineRegistry for round-trip tests
+// ---------------------------------------------------------------------------
+contract MockTeeMachineRegistryRT {
+    mapping(address => uint256) public extensionIds;
+
+    function registerMachine(address teeId, uint256 extId) external {
+        extensionIds[teeId] = extId;
+    }
+
+    function getExtensionId(address teeId) external view returns (uint256) {
+        return extensionIds[teeId];
+    }
+
+    function getRandomTeeIds(uint256, uint256) external pure returns (address[] memory) {
+        return new address[](0);
+    }
+
+    function getActiveTeeMachines(uint256) external pure returns (address[] memory, string[] memory) {
+        return (new address[](0), new string[](0));
+    }
+}
 
 /// @notice Verifies that ABI-encoded TEE output (address, uint256, uint256)
 ///         can be decoded and fed to CreditVault.receiveScore() with a valid signature.
 contract TeeRoundTripTest is Test {
     CreditVault internal vault;
+    MockTeeMachineRegistryRT internal mockRegistry;
     uint256 internal teePrivateKey;
     address internal teeSigner;
+
+    uint256 internal constant EXTENSION_ID = 300;
 
     // Mock FTSO that returns fixed prices
     MockFtsoV2 internal mockFtso;
@@ -23,11 +50,14 @@ contract TeeRoundTripTest is Test {
 
         mockFtso = new MockFtsoV2();
         mockFxrp = new MockFXRP();
+        mockRegistry = new MockTeeMachineRegistryRT();
+        mockRegistry.registerMachine(teeSigner, EXTENSION_ID);
 
         vault = new CreditVault(
             address(mockFtso),
             address(mockFxrp),
-            teeSigner,
+            address(mockRegistry),
+            EXTENSION_ID,
             24 hours
         );
     }
@@ -113,7 +143,7 @@ contract TeeRoundTripTest is Test {
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, ethSignedHash);
 
-        vm.expectRevert("CreditVault: invalid TEE signature");
+        vm.expectRevert("CreditVault: signer not a registered TEE machine");
         vault.receiveScore(decodedUser, decodedScore, decodedTimestamp, abi.encodePacked(r, s, v));
     }
 
@@ -127,8 +157,8 @@ contract TeeRoundTripTest is Test {
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(teePrivateKey, ethSignedHash);
 
-        // Try to submit with tampered score
-        vm.expectRevert("CreditVault: invalid TEE signature");
+        // Try to submit with tampered score — recovered signer won't match any registered machine
+        vm.expectRevert("CreditVault: signer not a registered TEE machine");
         vault.receiveScore(user, 1000, timestamp, abi.encodePacked(r, s, v));
     }
 }
