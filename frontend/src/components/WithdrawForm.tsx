@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { parseEther } from "viem";
+import { parseEther, formatEther } from "viem";
 import { buildWithdrawInstruction, type CustomInstruction } from "../lib/smartAccounts";
 
 interface Props {
   sendCustom: (instructions: CustomInstruction[], label: string) => Promise<{ txHash: string; waitForExecution: () => Promise<void> }>;
   onSuccess: () => void;
+  flrCollateral: bigint;
 }
 
-export function WithdrawForm({ sendCustom, onSuccess }: Props) {
+export function WithdrawForm({ sendCustom, onSuccess, flrCollateral }: Props) {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -60,6 +61,13 @@ export function WithdrawForm({ sendCustom, onSuccess }: Props) {
       >
         Withdraw FLR collateral back to your Smart Account.
       </p>
+
+      <div style={{ marginBottom: "24px", padding: "12px 0", borderTop: "1px solid var(--c-mist)", borderBottom: "1px solid var(--c-mist)" }}>
+        <p className="field-label" style={{ marginBottom: "4px" }}>Collateralized</p>
+        <p style={{ fontSize: "18px", fontWeight: 400, color: "var(--c-ink)", margin: 0 }}>
+          {Number(formatEther(flrCollateral)).toFixed(4)} <span style={{ fontSize: "11px", color: "var(--c-stone)" }}>FLR</span>
+        </p>
+      </div>
 
       <div className="field-group">
         <label className="field-label">Amount (FLR)</label>

@@ -1,32 +1,17 @@
 import { useState } from "react";
 import { parseEther, formatEther, zeroAddress } from "viem";
-import { publicClient } from "../lib/flareClient";
-import { CONTRACTS, creditVaultAbi } from "../config/contracts";
 import { buildBorrowInstruction, type CustomInstruction } from "../lib/smartAccounts";
 
 interface Props {
-  personalAccount: `0x${string}`;
   sendCustom: (instructions: CustomInstruction[], label: string) => Promise<{ txHash: string; waitForExecution: () => Promise<void> }>;
   onSuccess: () => void;
+  maxBorrow: bigint;
 }
 
-export function BorrowForm({ personalAccount, sendCustom, onSuccess }: Props) {
+export function BorrowForm({ sendCustom, onSuccess, maxBorrow }: Props) {
   const [amount, setAmount] = useState("");
-  const [maxBorrow, setMaxBorrow] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
-
-  async function fetchMax() {
-    try {
-      const max = await publicClient.readContract({
-        address: CONTRACTS.creditVault,
-        abi: creditVaultAbi,
-        functionName: "getMaxBorrow",
-        args: [personalAccount, zeroAddress],
-      }) as bigint;
-      setMaxBorrow(formatEther(max));
-    } catch { setMaxBorrow("0"); }
-  }
 
   async function handleBorrow() {
     setLoading(true);
@@ -77,6 +62,13 @@ export function BorrowForm({ personalAccount, sendCustom, onSuccess }: Props) {
         Borrow against your deposited collateral within your credit tier.
       </p>
 
+      <div style={{ marginBottom: "24px", padding: "12px 0", borderTop: "1px solid var(--c-mist)", borderBottom: "1px solid var(--c-mist)" }}>
+        <p className="field-label" style={{ marginBottom: "4px" }}>Max Borrowable</p>
+        <p style={{ fontSize: "18px", fontWeight: 400, color: "var(--c-ink)", margin: 0 }}>
+          {Number(formatEther(maxBorrow)).toFixed(4)} <span style={{ fontSize: "11px", color: "var(--c-stone)" }}>FLR</span>
+        </p>
+      </div>
+
       <div className="field-group">
         <label className="field-label">Amount (FLR)</label>
         <input
@@ -86,14 +78,6 @@ export function BorrowForm({ personalAccount, sendCustom, onSuccess }: Props) {
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00"
         />
-      </div>
-
-      <div style={{ marginBottom: "28px" }}>
-        <button className="btn-link" onClick={fetchMax}>
-          {maxBorrow !== null
-            ? `Max: ${Number(maxBorrow).toFixed(4)} FLR`
-            : "Check max borrow"}
-        </button>
       </div>
 
       {status && (
