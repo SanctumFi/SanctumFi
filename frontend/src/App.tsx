@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useXaman } from "./hooks/useXaman";
 import { useSmartAccount } from "./hooks/useSmartAccount";
-import { WalletConnect } from "./components/WalletConnect";
 import { Dashboard } from "./pages/Dashboard";
 import { Score } from "./pages/Score";
 import { Lend } from "./pages/Lend";
 import { LandingPage } from "./components/landing/LandingPage";
+import { Navbar } from "./components/landing/Navbar";
 import { type CustomInstruction } from "./lib/smartAccounts";
 
 type Tab = "dashboard" | "score" | "lend";
@@ -61,38 +61,22 @@ function AppShell({
   return (
     <div style={{ minHeight: "100vh" }}>
       {/* Header */}
-      <header className="veil-header reveal-fade">
-        <span className="veil-wordmark">Veil</span>
-
-        {/* Navigation */}
-        <nav style={{ display: "flex", alignItems: "center" }}>
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              className={`nav-tab${tab === t.key ? " active" : ""}`}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-
-        {/* Wallet */}
-        <WalletConnect
-          xrplAddress={xrplAddress}
-          connected={true}
-          loading={false}
-          onConnect={() => {}}
-          onDisconnect={onDisconnect}
-        />
-      </header>
+      <Navbar
+        onConnect={() => {}}
+        loading={false}
+        tab={tab}
+        onTabChange={setTab}
+        tabs={TABS}
+        xrplAddress={xrplAddress}
+        onDisconnect={onDisconnect}
+      />
 
       {/* Main content */}
       <main
         style={{
           maxWidth: "1040px",
           margin: "0 auto",
-          padding: "64px 48px 96px",
+          padding: "140px 48px 96px",
         }}
       >
         {tab === "dashboard" && (

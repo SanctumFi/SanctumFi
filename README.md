@@ -1,8 +1,8 @@
-# SanctumFi
+# Veil
 
 **Credit-scored DeFi lending on the Flare blockchain.**
 
-SanctumFi lets users connect their bank accounts to receive a privacy-preserving credit score computed inside a Trusted Execution Environment (TEE), then borrow cryptocurrency with collateral requirements dynamically adjusted based on that score. Higher scores unlock better loan-to-value ratios — bridging traditional finance credit history into decentralized lending.
+Veil lets users connect their bank accounts to receive a privacy-preserving credit score computed inside a Trusted Execution Environment (TEE), then borrow cryptocurrency with collateral requirements dynamically adjusted based on that score. Higher scores unlock better loan-to-value ratios — bridging traditional finance credit history into decentralized lending.
 
 ---
 
@@ -25,7 +25,7 @@ SanctumFi lets users connect their bank accounts to receive a privacy-preserving
 
 ## Overview
 
-SanctumFi solves a core DeFi problem: over-collateralization. Traditional DeFi requires 150–200% collateral because borrowers are anonymous. SanctumFi uses real banking data — processed privately inside a TEE — to assign a credit score (0–1000) that earns better borrowing terms.
+Veil solves a core DeFi problem: over-collateralization. Traditional DeFi requires 150–200% collateral because borrowers are anonymous. Veil uses real banking data — processed privately inside a TEE — to assign a credit score (0–1000) that earns better borrowing terms.
 
 **Credit Score Tiers:**
 
@@ -115,7 +115,7 @@ SanctumFi solves a core DeFi problem: over-collateralization. Traditional DeFi r
 ## Project Structure
 
 ```
-SanctumFi/
+Veil/
 ├── contracts/                        # Solidity smart contracts (Foundry)
 │   ├── src/
 │   │   ├── CreditVault.sol           # Core lending protocol
@@ -403,7 +403,7 @@ Test coverage includes:
 
 ## XRPL Integration
 
-XRPL users can interact with SanctumFi without a Flare wallet by sending XRP payments to the `SmartAccountReceiver` address with a structured memo:
+XRPL users can interact with Veil without a Flare wallet by sending XRP payments to the `SmartAccountReceiver` address with a structured memo:
 
 | Action | Memo Format |
 |--------|-------------|

@@ -47,12 +47,15 @@ export function HeroSection({ onConnect, loading }: Props) {
         </h1>
 
         <p
-          className="fade-in-up text-hero-sub text-center font-body text-xl leading-relaxed max-w-xl mt-10 opacity-80 tracking-wide"
-          style={{ animationDelay: "0.15s" }}
+          className="fade-in-up text-hero-sub text-center font-display italic opacity-55"
+          style={{
+            animationDelay: "0.15s",
+            fontSize: "clamp(16px, 1.6vw, 22px)",
+            letterSpacing: "0.02em",
+            marginTop: "3rem",
+          }}
         >
-          Your history enters the sanctum.
-          <br />
-          Your collateral emerges lighter.
+          Your history enters the sanctum — your collateral emerges lighter.
         </p>
       </div>
     </section>

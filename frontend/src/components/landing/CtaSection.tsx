@@ -44,7 +44,7 @@ export function CtaSection({ onConnect, loading }: Props) {
           letterSpacing: "0.1em",
           textTransform: "uppercase",
         }}>
-          SanctumFi — Your financial history, your borrowing power
+          Veil — Your financial history, your borrowing power
         </p>
 
       </div>

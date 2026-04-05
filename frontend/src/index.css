@@ -99,10 +99,19 @@ html, body {
   color: hsl(var(--foreground));
   font-family: 'Instrument Sans', sans-serif;
   font-weight: 400;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+p {
+  font-family: var(--f-body);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.75;
+  color: var(--c-shadow);
+  margin: 0;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -237,11 +246,11 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .label {
   font-family: var(--f-body);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.25em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--c-slate);
+  color: var(--c-shadow);
 }
 
 .score-mono {
@@ -260,7 +269,7 @@ input[type="number"] { -moz-appearance: textfield; }
   background: transparent;
   color: var(--c-shadow);
   font-family: var(--f-body);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.28em;
   text-transform: uppercase;
@@ -295,7 +304,7 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .btn-veil-sm {
   padding: 9px 32px;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .btn-veil-full { width: 100%; }
@@ -306,7 +315,7 @@ input[type="number"] { -moz-appearance: textfield; }
   border: none;
   color: var(--c-slate);
   font-family: var(--f-body);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -322,7 +331,7 @@ input[type="number"] { -moz-appearance: textfield; }
   border: none;
   color: var(--c-gold);
   font-family: var(--f-body);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   cursor: pointer;
@@ -337,11 +346,11 @@ input[type="number"] { -moz-appearance: textfield; }
 /* ─── Nav Tab ─── */
 .nav-tab {
   font-family: var(--f-body);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--c-stone);
+  color: var(--c-shadow);
   background: none;
   border: none;
   border-bottom: 1px solid transparent;
@@ -385,9 +394,9 @@ input[type="number"] { -moz-appearance: textfield; }
 .field-label {
   display: block;
   font-family: var(--f-body);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.25em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--c-slate);
   margin-bottom: 10px;
@@ -449,16 +458,16 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .data-val-sm {
   font-family: var(--f-body);
-  font-size: 13px;
-  font-weight: 300;
+  font-size: 14px;
+  font-weight: 400;
   color: var(--c-shadow);
 }
 
 .data-sub {
   font-family: var(--f-body);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 300;
-  color: var(--c-stone);
+  color: var(--c-slate);
   margin-top: 2px;
 }
 
@@ -491,16 +500,16 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 .state-message p:first-child {
   font-family: var(--f-display);
-  font-size: 22px;
+  font-size: 60px;
   font-weight: 300;
   font-style: italic;
-  color: var(--c-slate);
-  margin: 0 0 8px;
+  color: var(--c-shadow);
+  margin: 0 0 10px;
 }
 .state-message p:last-child {
-  font-size: 11px;
-  color: var(--c-stone);
-  letter-spacing: 0.05em;
+  font-size: 20px;
+  color: var(--c-slate);
+  letter-spacing: 0.06em;
 }
 
 /* ─── Error text ─── */
