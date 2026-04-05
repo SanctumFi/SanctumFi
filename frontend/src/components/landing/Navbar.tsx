@@ -1,6 +1,6 @@
 import { Button } from "../ui/button";
 
-const NAV_ITEMS = ["Markets", "Borrow", "Earn", "Institutions"];
+const NAV_ITEMS = ["Markets", "Borrow", "Earn"];
 
 interface Props {
   onConnect: () => void;
@@ -9,20 +9,20 @@ interface Props {
 
 export function Navbar({ onConnect, loading }: Props) {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 py-5 px-8">
+    <nav className="fixed top-0 left-0 right-0 z-50 py-6 px-10">
       <div className="flex flex-row items-center justify-between">
         {/* Logo */}
-        <span className="font-display text-xl tracking-widest text-foreground">
-          SANCTUM
+        <span className="font-display text-6xl tracking-widest text-foreground italic">
+          Veil
         </span>
 
         {/* Center nav items */}
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-20">
           {NAV_ITEMS.map((item) => (
             <a
               key={item}
               href={`#${item.toLowerCase()}`}
-              className="text-foreground/70 text-sm tracking-wide font-body transition-opacity duration-200 hover:opacity-100"
+              className="text-foreground/70 text-lg tracking-widest uppercase font-body transition-opacity duration-200 hover:opacity-100"
             >
               {item}
             </a>
@@ -32,12 +32,12 @@ export function Navbar({ onConnect, loading }: Props) {
         {/* CTA */}
         <Button
           variant="heroSecondary"
-          size="sm"
-          className="px-6 py-2"
+          size="default"
+          className="px-8 py-3 text-base tracking-widest uppercase"
           onClick={onConnect}
           disabled={loading}
         >
-          {loading ? "Connecting\u2026" : "Launch App"}
+          {loading ? "Connecting\u2026" : "Connect Wallet"}
         </Button>
       </div>
 
